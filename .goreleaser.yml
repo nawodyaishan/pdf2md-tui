@@ -24,7 +24,7 @@ builds:
       - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.Version={{.Version}}
       - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.Commit={{.ShortCommit}}
       - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.Date={{.Date}}
-      - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.GoVersion={{.Env.GOVERSION}}
+      - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.GoVersion={{ if index .Env "GOVERSION" }}{{.Env.GOVERSION}}{{ else }}unknown{{ end }}
 
 archives:
   - id: default
