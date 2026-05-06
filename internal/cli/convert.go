@@ -49,12 +49,37 @@ var convertCmd = &cobra.Command{
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
+		conv := converter.New(dateFormat, stripNoise)
+
+		// Pre-flight: detect output files that already exist.
+		if !forceOverwrite {
+			var existing []string
+			for _, f := range pdfFiles {
+				if _, err := os.Stat(conv.OutputPath(f, outDirPath)); err == nil {
+					existing = append(existing, conv.OutputPath(f, outDirPath))
+				}
+			}
+			if len(existing) > 0 {
+				if tui.IsInteractive() {
+					ok, promptErr := ui.ConfirmOverwrite(existing)
+					if promptErr != nil {
+						return promptErr
+					}
+					if !ok {
+						fmt.Println("Conversion cancelled.")
+						return nil
+					}
+				} else {
+					ui.WarnOverwrite(existing)
+				}
+			}
+		}
+
 		numWorkers := workers
 		if numWorkers <= 0 {
 			numWorkers = runtime.NumCPU()
 		}
 
-		conv := converter.New(dateFormat, stripNoise)
 		ui.StartConversion(len(pdfFiles))
 
 		jobs := make(chan string, len(pdfFiles))
