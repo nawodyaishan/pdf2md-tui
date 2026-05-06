@@ -32,6 +32,10 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
+# Internal Docs and Claude Code context file (machine-local AI guidance)
+CLAUDE.md
+internal-docs/
+
 # npm distribution binaries (future work — not yet implemented)
 # npm/*/bin/pdf2md-tui
 # npm/*/bin/pdf2md-tui.exe
@@ -50,5 +54,4 @@ Thumbs.db
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-docs
 testdata
