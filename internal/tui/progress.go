@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 	"github.com/pterm/pterm"
 	"github.com/pterm/pterm/putils"
-	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 )
 
 const (
-	author    = "nawodyaishan"
-	repoURL   = "github.com/nawodyaishan/pdf2md-tui"
+	author  = "nawodyaishan"
+	repoURL = "github.com/nawodyaishan/pdf2md-tui"
 )
 
 // Progress represents the TUI state for the conversion process.

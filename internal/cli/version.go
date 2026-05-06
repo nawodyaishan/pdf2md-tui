@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
+	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
-	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 )
 
 var versionCmd = &cobra.Command{

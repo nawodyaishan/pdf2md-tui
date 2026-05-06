@@ -110,9 +110,9 @@ func TestGroupIntoRows_Empty(t *testing.T) {
 func TestGroupIntoRows_GroupsByYTolerance(t *testing.T) {
 	words := []word{
 		{x: 10, y: 100, text: "A"},
-		{x: 200, y: 101, text: "B"},  // within 3pt tolerance of Y=100
+		{x: 200, y: 101, text: "B"}, // within 3pt tolerance of Y=100
 		{x: 10, y: 80, text: "C"},
-		{x: 200, y: 79, text: "D"},   // within 3pt tolerance of Y=80
+		{x: 200, y: 79, text: "D"}, // within 3pt tolerance of Y=80
 	}
 	rows := groupIntoRows(words, 3.0)
 	if len(rows) != 2 {
