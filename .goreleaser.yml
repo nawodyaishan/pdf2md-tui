@@ -1,0 +1,74 @@
+version: 2
+
+project_name: pdf2md-tui
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: pdf2md-tui
+    main: ./cmd/pdf2md-tui
+    binary: pdf2md-tui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.Version={{.Version}}
+      - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.Commit={{.ShortCommit}}
+      - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.Date={{.Date}}
+      - -X github.com/nawodyaishan/pdf2md-tui/pkg/version.GoVersion={{.Env.GOVERSION}}
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+
+# Homebrew Tap Formula
+brews:
+  - repository:
+      owner: nawodyaishan
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/nawodyaishan/pdf2md-tui"
+    description: "High-performance TUI tool for batch PDF to LLM-friendly Markdown conversion"
+    license: "MIT"
+    test: |
+      system "#{bin}/pdf2md-tui", "version"
+    install: |
+      bin.install "pdf2md-tui"
+
+# nFPM for deb/rpm packages (bonus)
+nfpms:
+  - id: packages
+    package_name: pdf2md-tui
+    vendor: nawodyaishan
+    homepage: https://github.com/nawodyaishan/pdf2md-tui
+    description: "Batch PDF to LLM-optimized Markdown converter with TUI progress"
+    license: MIT
+    formats:
+      - deb
+      - rpm
