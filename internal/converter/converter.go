@@ -79,13 +79,17 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 			continue
 		}
 
-		text, err := page.GetPlainText(nil)
-		if err != nil {
-			continue // Skip pages that fail to extract
-		}
+		// Try positional extraction first (preserves tables)
+		text := extractWithTables(page)
 
-		// Clean up: ledongthuc/pdf puts each word on a separate line with extra spacing
-		text = cleanExtractedText(text)
+		// Fallback to plain text if positional extraction yields nothing
+		if strings.TrimSpace(text) == "" {
+			plainText, err := page.GetPlainText(nil)
+			if err != nil {
+				continue
+			}
+			text = cleanExtractedText(plainText)
+		}
 
 		if c.StripNoise {
 			text = applyLLMOptimizations(text)
