@@ -3,15 +3,13 @@ package converter
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/pdfcpu/pdfcpu/pkg/api"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/ledongthuc/pdf"
 )
 
 // Converter handles the PDF to MD conversion settings.
@@ -41,7 +39,7 @@ func New(dateFormat string, stripNoise bool) *Converter {
 	}
 }
 
-// Convert processes a single PDF file.
+// Convert processes a single PDF file into LLM-friendly Markdown.
 func (c *Converter) Convert(pdfPath, outDir string) Result {
 	start := time.Now()
 	res := Result{
@@ -63,41 +61,36 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	outFileName := fmt.Sprintf("%s%s.md", baseName, dateSuffix)
 	res.OutputPath = filepath.Join(outDir, outFileName)
 
-	f, err := os.Open(pdfPath)
+	// Open PDF using ledongthuc/pdf which handles font decoding and glyph mapping
+	f, reader, err := pdf.Open(pdfPath)
 	if err != nil {
 		res.Err = fmt.Errorf("open pdf: %w", err)
 		return res
 	}
 	defer f.Close()
 
-	ctx, err := api.ReadContext(f, model.NewDefaultConfiguration())
-	if err != nil {
-		res.Err = fmt.Errorf("read context: %w", err)
-		return res
-	}
-
-	if err := api.OptimizeContext(ctx); err != nil {
-		// Ignore optimization errors, try to proceed
-	}
-
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("# %s\n\n", filepath.Base(pdfPath)))
+	buf.WriteString(fmt.Sprintf("# %s\n\n", baseName))
 
-	// pdfcpu doesn't have high-level text extraction. 
-	// We extract raw content streams and perform a naive parse of text operands (Tj, TJ).
-	for i := 1; i <= ctx.PageCount; i++ {
-		page, err := api.ExtractPage(ctx, i)
-		if err != nil {
-			continue // Skip problematic pages
+	totalPages := reader.NumPage()
+	for i := 1; i <= totalPages; i++ {
+		page := reader.Page(i)
+		if page.V.IsNull() {
+			continue
 		}
-		
-		content, _ := io.ReadAll(page)
-		text := extractNaiveText(content)
-		
+
+		text, err := page.GetPlainText(nil)
+		if err != nil {
+			continue // Skip pages that fail to extract
+		}
+
+		// Clean up: ledongthuc/pdf puts each word on a separate line with extra spacing
+		text = cleanExtractedText(text)
+
 		if c.StripNoise {
 			text = applyLLMOptimizations(text)
 		}
-		
+
 		if strings.TrimSpace(text) != "" {
 			buf.WriteString(text)
 			buf.WriteString("\n\n")
@@ -115,52 +108,51 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	return res
 }
 
-// extractNaiveText attempts to extract text strings from PDF content streams.
-// Looks for (Text) Tj and [(Text) 120 (More)] TJ
-func extractNaiveText(content []byte) string {
-	str := string(content)
-	var result []string
-	
-	// Very naive regex to catch strings inside parentheses before Tj/TJ
-	// e.g. (Hello World) Tj
-	reTj := regexp.MustCompile(`\((.*?)\)\s*Tj`)
-	matchesTj := reTj.FindAllStringSubmatch(str, -1)
-	for _, m := range matchesTj {
-		if len(m) > 1 {
-			result = append(result, m[1])
+// cleanExtractedText joins word fragments that ledongthuc/pdf separates with newlines.
+// The library outputs each word on its own line with single-space lines as separators:
+//
+//	"Hello\n \nWorld\n"   → "Hello World"
+//
+// Truly empty lines (no space) signal paragraph breaks.
+func cleanExtractedText(text string) string {
+	lines := strings.Split(text, "\n")
+	var paragraphs []string
+	var currentWords []string
+
+	for _, line := range lines {
+		// A line that is exactly a single space is a word separator from the library
+		if line == " " {
+			continue // skip — the preceding/following non-empty lines are the words
 		}
+
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			// Truly empty line = paragraph break
+			if len(currentWords) > 0 {
+				paragraphs = append(paragraphs, strings.Join(currentWords, " "))
+				currentWords = nil
+			}
+			continue
+		}
+		currentWords = append(currentWords, trimmed)
+	}
+	// Flush remaining words
+	if len(currentWords) > 0 {
+		paragraphs = append(paragraphs, strings.Join(currentWords, " "))
 	}
 
-	// For TJ e.g. [(H) 120 (ello)] TJ
-	reTJ := regexp.MustCompile(`\[(.*?)\]\s*TJ`)
-	matchesTJ := reTJ.FindAllStringSubmatch(str, -1)
-	reInner := regexp.MustCompile(`\((.*?)\)`)
-	for _, m := range matchesTJ {
-		if len(m) > 1 {
-			innerMatches := reInner.FindAllStringSubmatch(m[1], -1)
-			var innerText string
-			for _, im := range innerMatches {
-				if len(im) > 1 {
-					innerText += im[1]
-				}
-			}
-			if innerText != "" {
-				result = append(result, innerText)
-			}
-		}
-	}
-
-	return strings.Join(result, " ")
+	return strings.TrimSpace(strings.Join(paragraphs, "\n\n"))
 }
 
+// applyLLMOptimizations aggressively strips noise for LLM consumption.
 func applyLLMOptimizations(text string) string {
 	// Remove isolated numbers (often page numbers) on their own line
 	rePageNums := regexp.MustCompile(`(?m)^\s*\d+\s*$`)
 	text = rePageNums.ReplaceAllString(text, "")
-	
+
 	// Collapse multiple spaces and newlines into a single space
 	reSpaces := regexp.MustCompile(`\s+`)
 	text = reSpaces.ReplaceAllString(text, " ")
-	
+
 	return strings.TrimSpace(text)
 }

@@ -7,38 +7,38 @@ import (
 	"testing"
 )
 
-func TestExtractNaiveText(t *testing.T) {
+func TestCleanExtractedText(t *testing.T) {
 	tests := []struct {
-		name    string
-		content []byte
-		want    string
+		name string
+		in   string
+		want string
 	}{
 		{
-			name:    "Tj operand",
-			content: []byte(`BT /F1 12 Tf (Hello World) Tj ET`),
-			want:    "Hello World",
+			name: "word-per-line rejoining",
+			in:   "Hello\n \nWorld\n \nTest\n",
+			want: "Hello World Test",
 		},
 		{
-			name:    "TJ operand",
-			content: []byte(`BT [(H) 120 (ello) 12 ( ) (World)] TJ ET`),
-			want:    "Hello World",
+			name: "paragraph breaks on empty lines",
+			in:   "First\n \nparagraph\n\nSecond\n \nparagraph\n",
+			want: "First paragraph\n\nSecond paragraph",
 		},
 		{
-			name:    "Mixed content",
-			content: []byte(`(First) Tj 100 200 Td [(Second)] TJ`),
-			want:    "First Second",
+			name: "empty input",
+			in:   "",
+			want: "",
 		},
 		{
-			name:    "No text",
-			content: []byte(`10 20 m 30 40 l S`),
-			want:    "",
+			name: "whitespace only",
+			in:   "  \n \n  \n",
+			want: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := extractNaiveText(tt.content); got != tt.want {
-				t.Errorf("extractNaiveText() = %v, want %v", got, tt.want)
+			if got := cleanExtractedText(tt.in); got != tt.want {
+				t.Errorf("cleanExtractedText() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -53,19 +53,14 @@ func TestApplyLLMOptimizations(t *testing.T) {
 		{
 			name: "collapse spaces",
 			in:   "Hello     World\n\n\nTesting",
-			want: "Hello World Testing", // Note: our simple logic replaces all spaces/newlines with space
+			want: "Hello World Testing",
 		},
 		{
 			name: "remove isolated numbers (page numbers)",
 			in:   "Hello World\n12\nNext Page",
-			want: "Hello World Next Page", // Wait, naive applyLLMOptimizations replaces all \s+ to single space first, so line breaks are lost before page num regex. Let's fix that in converter.go or expect different result.
+			want: "Hello World Next Page",
 		},
 	}
-
-	// Wait, our applyLLMOptimizations collapses \s+ to " " first, meaning "Hello World\n12\n" becomes "Hello World 12 ".
-	// The page number regex `(?m)^\s*\d+\s*$` won't match.
-	// I'll write the test to verify current behavior and fix converter.go if needed.
-	// For now, let's just test basic space collapse.
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,7 +92,7 @@ func TestConverter_Convert_NotAPDF(t *testing.T) {
 	if res.Err == nil {
 		t.Error("expected error for invalid pdf format, got nil")
 	}
-	if !strings.Contains(res.Err.Error(), "read context") {
-		t.Errorf("expected read context error, got %v", res.Err)
+	if !strings.Contains(res.Err.Error(), "open pdf") {
+		t.Errorf("expected open pdf error, got %v", res.Err)
 	}
 }
