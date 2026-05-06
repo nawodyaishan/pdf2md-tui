@@ -38,7 +38,7 @@ func (p *Progress) PrintBanner() {
 		pterm.LightCyan("⚡ LLM-Optimized PDF → Markdown Converter"),
 	)
 	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
-		pterm.Gray(14, fmt.Sprintf("v%s • by @%s", version.Version, author)),
+		pterm.Gray(fmt.Sprintf("v%s • by @%s", version.Version, author)),
 	)
 	pterm.Println() // breathing room
 }
@@ -122,8 +122,8 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 		{"Errors", pterm.NewStyle(errStyle).Sprint(errLabel)},
 		{"Duration", duration.Round(time.Millisecond).String()},
 		{"", ""},
-		{"PDF Source Size", formatBytes(inputBytes) + pterm.Gray(14, fmt.Sprintf("  (~%d tokens)", inputTokens))},
-		{"Markdown Output", formatBytes(outputBytes) + pterm.Gray(14, fmt.Sprintf("  (~%d tokens)", outputTokens))},
+		{"PDF Source Size", formatBytes(inputBytes) + pterm.Gray(fmt.Sprintf("  (~%d tokens)", inputTokens))},
+		{"Markdown Output", formatBytes(outputBytes) + pterm.Gray(fmt.Sprintf("  (~%d tokens)", outputTokens))},
 		{"Token Savings", pterm.NewStyle(pterm.FgLightGreen, pterm.Bold).Sprintf("▼ %.1f%% reduction", savings)},
 	}
 
@@ -136,7 +136,7 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 	// Footer
 	pterm.Println()
 	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
-		pterm.Gray(14, fmt.Sprintf("─── %s ───", repoURL)),
+		pterm.Gray(fmt.Sprintf("─── %s ───", repoURL)),
 	)
 	pterm.Println()
 }
