@@ -1,0 +1,52 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+pdf2md-tui
+
+# Build & Release artifacts
+dist/
+*.tar.gz
+*.zip
+checksums.txt
+
+# Test artifacts
+coverage.out
+coverage.html
+*.test
+*.prof
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# npm distribution binaries (built during CI)
+npm/*/bin/pdf2md-tui
+npm/*/bin/pdf2md-tui.exe
+node_modules/
+
+# Environment & secrets
+.env
+.env.local
+*.pem
+*.key
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
