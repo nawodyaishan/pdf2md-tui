@@ -39,10 +39,12 @@
 ## Features
 
 - **Live TUI** — animated spinner, progress bar, and a token-savings summary table on completion
+- **Interactive Menu** — simply run `pdf2md-tui` without arguments to launch a guided configuration wizard
 - **Worker pool** — concurrent conversion using `runtime.NumCPU()` workers by default; configurable via `--workers`
 - **Table detection** — positional text analysis coalesces characters into words, groups rows, and detects column alignment to emit GFM pipe tables
 - **Two-path extraction** — positional extraction first; falls back to plain-text for image-heavy pages
 - **`--strip-noise`** — aggressively removes page numbers, repeated headers/footers, and excess whitespace for maximum token density
+- **Smart Overwrites** — interactively prompts before overwriting existing files, bypassed via `--force`
 - **Date-stamped outputs** — `report_2026-05-06.md` so you always know which version was processed
 - **Single static binary** — no runtime dependencies; CGO disabled
 
@@ -73,6 +75,16 @@ Platforms: Linux, macOS, Windows × amd64 / arm64. Packages: `.tar.gz`, `.zip`, 
 
 ## Usage
 
+### Interactive Mode
+
+Simply run the tool without arguments to launch the guided interactive wizard. It will prompt you for directories, flags, and handle file overwrites smoothly:
+
+```bash
+pdf2md-tui
+```
+
+### CLI Mode
+
 ```bash
 # Convert all PDFs in ./docs, write Markdown to ./docs/md/
 pdf2md-tui convert ./docs
@@ -80,8 +92,8 @@ pdf2md-tui convert ./docs
 # Recurse into subdirectories and strip layout noise for LLM ingestion
 pdf2md-tui convert ./archive --recursive --strip-noise
 
-# Use 8 workers, custom output directory, no date suffix
-pdf2md-tui convert ./papers --workers 8 --output out --date-format none
+# Use 8 workers, custom output directory, no date suffix, and force overwrite existing files
+pdf2md-tui convert ./papers --workers 8 --output out --date-format none --force
 
 # Print version and build info
 pdf2md-tui version
@@ -95,9 +107,9 @@ pdf2md-tui version
 | `--recursive` | `-r` | `false` | Scan subdirectories |
 | `--workers` | `-w` | `NumCPU` | Number of concurrent conversion workers |
 | `--date-format` | | `2006-01-02` | Date suffix format (Go reference time); `none` disables the suffix |
+| `--force` | `-f` | `false` | Overwrite existing output files without prompting |
 | `--strip-noise` | | `false` | Aggressively remove page numbers, headers/footers, and excess whitespace |
 | `--verbose` | `-v` | `false` | Print per-file errors to stderr |
-| `--force` | `-f` | `false` | Overwrite existing output files without prompting |
 
 ### Output structure
 
