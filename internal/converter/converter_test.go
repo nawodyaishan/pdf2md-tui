@@ -86,7 +86,9 @@ func TestConverter_Convert_NotAPDF(t *testing.T) {
 	tempDir := t.TempDir()
 
 	badPDF := filepath.Join(tempDir, "bad.pdf")
-	os.WriteFile(badPDF, []byte("this is not a real pdf"), 0644)
+	if err := os.WriteFile(badPDF, []byte("this is not a real pdf"), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
 
 	res := conv.Convert(badPDF, tempDir)
 	if res.Err == nil {

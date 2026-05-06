@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pterm/pterm"
+	"github.com/pterm/pterm/putils"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 )
 
@@ -28,8 +29,8 @@ func New() *Progress {
 // PrintBanner renders the branded startup banner.
 func (p *Progress) PrintBanner() {
 	banner, _ := pterm.DefaultBigText.WithLetters(
-		pterm.NewLettersFromStringWithStyle("pdf", pterm.NewStyle(pterm.FgCyan)),
-		pterm.NewLettersFromStringWithStyle("2md", pterm.NewStyle(pterm.FgLightMagenta)),
+		putils.LettersFromStringWithStyle("pdf", pterm.NewStyle(pterm.FgCyan)),
+		putils.LettersFromStringWithStyle("2md", pterm.NewStyle(pterm.FgLightMagenta)),
 	).Srender()
 	pterm.Print(banner)
 
@@ -85,7 +86,7 @@ func (p *Progress) Increment() {
 // StopConversion stops the progress bar.
 func (p *Progress) StopConversion() {
 	if p.bar != nil {
-		p.bar.Stop()
+		_, _ = p.bar.Stop()
 	}
 }
 
@@ -126,7 +127,7 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 		{"Token Savings", pterm.NewStyle(pterm.FgLightGreen, pterm.Bold).Sprintf("▼ %.1f%% reduction", savings)},
 	}
 
-	pterm.DefaultTable.
+	_ = pterm.DefaultTable.
 		WithHasHeader().
 		WithHeaderStyle(pterm.NewStyle(pterm.FgCyan, pterm.Bold)).
 		WithData(data).

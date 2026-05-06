@@ -67,7 +67,7 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 		res.Err = fmt.Errorf("open pdf: %w", err)
 		return res
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("# %s\n\n", baseName))

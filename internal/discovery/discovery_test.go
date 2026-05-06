@@ -12,7 +12,7 @@ func TestFindPDFs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test files
 	files := []string{
@@ -72,7 +72,9 @@ func TestFindPDFs(t *testing.T) {
 	}
 
 	// Create empty dir for test
-	os.MkdirAll(filepath.Join(tempDir, "empty"), 0755)
+	if err := os.MkdirAll(filepath.Join(tempDir, "empty"), 0755); err != nil {
+		t.Fatalf("Failed to create empty dir: %v", err)
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,13 +99,13 @@ func TestFindPDFs_PermissionError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	subDir := filepath.Join(tempDir, "restricted")
 	if err := os.MkdirAll(subDir, 0000); err != nil { // No permissions
 		t.Fatalf("Failed to create restricted dir: %v", err)
 	}
-	defer os.Chmod(subDir, 0755) // Ensure we can clean it up
+	defer func() { _ = os.Chmod(subDir, 0755) }() // Ensure we can clean it up
 
 	_, err = FindPDFs(tempDir, true)
 	if err == nil {

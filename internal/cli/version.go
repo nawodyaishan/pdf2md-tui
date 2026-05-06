@@ -25,7 +25,7 @@ var versionCmd = &cobra.Command{
 			{"Go", version.GoVersion},
 		}
 
-		pterm.DefaultTable.
+		_ = pterm.DefaultTable.
 			WithHasHeader().
 			WithData(data).
 			Render()
