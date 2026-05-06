@@ -9,6 +9,10 @@
 
 ---
 
+<div align="center">
+  <img src="public/banner.jpeg" alt="pdf2md-tui banner" width="600" />
+</div>
+
 ## Why?
 
 **PDFs are among the worst formats for LLM consumption.** Binary encoding, embedded fonts, layout metadata, headers, footers, and page-break artifacts all inflate token counts and degrade context quality. A 50-page PDF can burn 3–5× more tokens than the equivalent clean Markdown.
@@ -24,6 +28,7 @@
 *Token estimates based on ~4 chars/token (GPT-4 tokenizer). Actual savings depend on PDF structure.*
 
 **Use cases:**
+
 - Preprocessing document archives for RAG (Retrieval-Augmented Generation) pipelines
 - Building LLM fine-tuning datasets from PDF collections
 - Reducing token costs when processing large document sets via API
@@ -92,6 +97,7 @@ pdf2md-tui version
 | `--date-format` | | `2006-01-02` | Date suffix format (Go reference time); `none` disables the suffix |
 | `--strip-noise` | | `false` | Aggressively remove page numbers, headers/footers, and excess whitespace |
 | `--verbose` | `-v` | `false` | Print per-file errors to stderr |
+| `--force` | `-f` | `false` | Overwrite existing output files without prompting |
 
 ### Output structure
 
@@ -144,6 +150,7 @@ Near-term planned features include a `--quiet` flag for CI use, `.txt`/`.docx` i
 Bug reports and feature requests: open an issue using the provided templates.
 
 For code contributions:
+
 1. Check [ROADMAP.md](ROADMAP.md) and open issues for `help wanted` items.
 2. Fork, branch, implement, add tests, and open a PR.
 3. PRs must pass `make check` (fmt + vet + lint + test with race detector).
