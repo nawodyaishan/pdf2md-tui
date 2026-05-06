@@ -1,6 +1,6 @@
 # pdf2md-tui
 
-> Batch-convert PDFs to LLM-optimized Markdown — Go CLI with a live TUI, worker pool concurrency, and table detection.
+> From token-wasting PDFs to a polished, concurrent Go TUI in 3 hours. Meet your new LLM-optimized Markdown pipeline.
 
 [![CI](https://github.com/nawodyaishan/pdf2md-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/nawodyaishan/pdf2md-tui/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nawodyaishan/pdf2md-tui)](go.mod)
