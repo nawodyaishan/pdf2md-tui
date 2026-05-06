@@ -1,0 +1,78 @@
+name: Feature Request
+description: Propose a new feature or improvement
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a feature request, check the [ROADMAP](../../blob/main/ROADMAP.md) — your idea may already be planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow or pain point does this address? Concrete scenarios are more actionable than abstract goals.
+      placeholder: "When processing a directory of scanned PDFs, the tool produces empty .md files because..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe your preferred implementation or UX. Sketching a flag name, output format, or CLI invocation is helpful.
+      placeholder: |
+        Add a `--ocr` flag that falls back to Tesseract for image-only pages:
+        `pdf2md-tui convert ./docs --ocr`
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds have you tried? Why are they insufficient?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      options:
+        - CLI / flags
+        - PDF extraction / text quality
+        - Table detection
+        - OCR
+        - Input formats (.txt, .docx, other)
+        - Output formats (JSON, YAML, other)
+        - TUI / progress display
+        - Distribution (npm, deb, rpm, Homebrew)
+        - Performance / concurrency
+        - Configuration file
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - Nice to have
+        - Would significantly improve my workflow
+        - Blocking adoption for my team
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR for this feature
+        - label: I can provide test PDFs or example data
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission checklist
+      options:
+        - label: I searched existing issues and the ROADMAP — this is not already tracked
+          required: true
