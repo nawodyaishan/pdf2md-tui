@@ -1,7 +1,6 @@
 package converter
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -154,7 +153,11 @@ func groupIntoRows(words []word, tolerance float64) []tableRow {
 
 // detectColumnPositions analyzes a range of rows to find consistent column X positions.
 // Returns the detected column positions if 3+ columns are found, nil otherwise.
+// Requires a minimum gap of minGap points between columns to distinguish real table
+// columns from tightly-packed body text.
 func detectColumnPositions(rows []tableRow, minColumns int) []float64 {
+	const minGap = 50.0 // minimum gap between columns in points (~0.7 inches)
+
 	// Count how often each X position appears across rows (rounded to nearest 5pt)
 	xFreq := make(map[int]int)
 	for _, row := range rows {
@@ -174,14 +177,22 @@ func detectColumnPositions(rows []tableRow, minColumns int) []float64 {
 		threshold = 2
 	}
 
-	var columns []float64
+	var candidates []float64
 	for x, count := range xFreq {
 		if count >= threshold {
-			columns = append(columns, float64(x))
+			candidates = append(candidates, float64(x))
 		}
 	}
 
-	sort.Float64s(columns)
+	sort.Float64s(candidates)
+
+	// Merge columns that are too close together (< minGap apart)
+	var columns []float64
+	for _, c := range candidates {
+		if len(columns) == 0 || (c-columns[len(columns)-1]) >= minGap {
+			columns = append(columns, c)
+		}
+	}
 
 	if len(columns) < minColumns {
 		return nil
@@ -268,19 +279,34 @@ func renderRowsAsMarkdown(rows []tableRow) string {
 }
 
 // findTableEnd looks for the end of a contiguous table region starting at startIdx.
-// A table row is defined as having cells in 3+ distinct X-position buckets.
+// A table row is defined as having cells in 3+ distinct columns (with >= 50pt gaps).
 func findTableEnd(rows []tableRow, startIdx, minColumns int) int {
+	const minGap = 50.0
 	end := startIdx
 
 	for end < len(rows) {
 		row := rows[end]
-		// Count distinct X-position buckets in this row
-		buckets := make(map[int]bool)
+		// Collect distinct X-position buckets
+		bucketSet := make(map[int]bool)
 		for _, cell := range row.cells {
 			bucket := int(math.Round(cell.x/5.0)) * 5
-			buckets[bucket] = true
+			bucketSet[bucket] = true
 		}
-		if len(buckets) >= minColumns {
+		// Sort and merge close buckets (same logic as detectColumnPositions)
+		var sorted []float64
+		for b := range bucketSet {
+			sorted = append(sorted, float64(b))
+		}
+		sort.Float64s(sorted)
+
+		var merged []float64
+		for _, s := range sorted {
+			if len(merged) == 0 || (s-merged[len(merged)-1]) >= minGap {
+				merged = append(merged, s)
+			}
+		}
+
+		if len(merged) >= minColumns {
 			end++
 		} else {
 			break
@@ -288,70 +314,4 @@ func findTableEnd(rows []tableRow, startIdx, minColumns int) int {
 	}
 
 	return end
-}
-
-// formatMarkdownTable is a helper to format a slice of rows as markdown pipe table.
-func formatMarkdownTable(header []string, dataRows [][]string) string {
-	var buf strings.Builder
-
-	// Header
-	buf.WriteString("| ")
-	buf.WriteString(strings.Join(header, " | "))
-	buf.WriteString(" |\n|")
-	for range header {
-		buf.WriteString(" --- |")
-	}
-	buf.WriteString("\n")
-
-	// Data rows
-	for _, row := range dataRows {
-		// Pad row to match header length
-		for len(row) < len(header) {
-			row = append(row, "")
-		}
-		buf.WriteString("| ")
-		buf.WriteString(strings.Join(row, " | "))
-		buf.WriteString(" |\n")
-	}
-
-	return buf.String()
-}
-
-// padToLength pads a string slice to the specified length with empty strings.
-func padToLength(s []string, length int) []string {
-	for len(s) < length {
-		s = append(s, "")
-	}
-	return s
-}
-
-// maxCols returns the maximum number of columns across all rows.
-func maxCols(rows [][]string) int {
-	max := 0
-	for _, row := range rows {
-		if len(row) > max {
-			max = len(row)
-		}
-	}
-	return max
-}
-
-// isTableRow heuristically determines if a row looks like it belongs to a table.
-// Uses the number of distinct X-position buckets as the primary signal.
-func isTableRow(row tableRow, minColumns int) bool {
-	buckets := make(map[int]bool)
-	for _, cell := range row.cells {
-		bucket := int(math.Round(cell.x / 5.0)) * 5
-		buckets[bucket] = true
-	}
-	return len(buckets) >= minColumns
-}
-
-// formatTableSeparator generates the markdown separator line for a table.
-func formatTableSeparator(numCols int) string {
-	parts := make([]string, numCols)
-	for i := range parts {
-		parts[i] = "---"
-	}
-	return fmt.Sprintf("| %s |", strings.Join(parts, " | "))
 }
