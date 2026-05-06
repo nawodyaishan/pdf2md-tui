@@ -53,13 +53,8 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	}
 	res.InputBytes = info.Size()
 
-	baseName := strings.TrimSuffix(filepath.Base(pdfPath), filepath.Ext(pdfPath))
-	dateSuffix := ""
-	if c.DateFormat != "" && c.DateFormat != "none" {
-		dateSuffix = "_" + time.Now().Format(c.DateFormat)
-	}
-	outFileName := fmt.Sprintf("%s%s.md", baseName, dateSuffix)
-	res.OutputPath = filepath.Join(outDir, outFileName)
+	baseName, outFile := outputFilename(pdfPath, c.DateFormat, start)
+	res.OutputPath = filepath.Join(outDir, outFile)
 
 	// Open PDF using ledongthuc/pdf which handles font decoding and glyph mapping
 	f, reader, err := pdf.Open(pdfPath)
@@ -110,6 +105,23 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	res.OutputBytes = int64(len(outData))
 	res.Duration = time.Since(start)
 	return res
+}
+
+// outputFilename returns the document base name and the full output filename for a PDF.
+func outputFilename(pdfPath, dateFormat string, now time.Time) (baseName, filename string) {
+	baseName = strings.TrimSuffix(filepath.Base(pdfPath), filepath.Ext(pdfPath))
+	dateSuffix := ""
+	if dateFormat != "" && dateFormat != "none" {
+		dateSuffix = "_" + now.Format(dateFormat)
+	}
+	return baseName, fmt.Sprintf("%s%s.md", baseName, dateSuffix)
+}
+
+// OutputPath returns the expected output path for a PDF without performing conversion.
+// Used by the CLI for pre-flight overwrite checks.
+func (c *Converter) OutputPath(pdfPath, outDir string) string {
+	_, filename := outputFilename(pdfPath, c.DateFormat, time.Now())
+	return filepath.Join(outDir, filename)
 }
 
 // cleanExtractedText joins word fragments that ledongthuc/pdf separates with newlines.
