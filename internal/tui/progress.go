@@ -5,6 +5,12 @@ import (
 	"time"
 
 	"github.com/pterm/pterm"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
+)
+
+const (
+	author    = "nawodyaishan"
+	repoURL   = "github.com/nawodyaishan/pdf2md-tui"
 )
 
 // Progress represents the TUI state for the conversion process.
@@ -19,9 +25,28 @@ func New() *Progress {
 	return &Progress{}
 }
 
+// PrintBanner renders the branded startup banner.
+func (p *Progress) PrintBanner() {
+	banner, _ := pterm.DefaultBigText.WithLetters(
+		pterm.NewLettersFromStringWithStyle("pdf", pterm.NewStyle(pterm.FgCyan)),
+		pterm.NewLettersFromStringWithStyle("2md", pterm.NewStyle(pterm.FgLightMagenta)),
+	).Srender()
+	pterm.Print(banner)
+
+	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
+		pterm.LightCyan("⚡ LLM-Optimized PDF → Markdown Converter"),
+	)
+	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
+		pterm.Gray(14, fmt.Sprintf("v%s • by @%s", version.Version, author)),
+	)
+	pterm.Println() // breathing room
+}
+
 // StartDiscovery starts the spinner for the discovery phase.
 func (p *Progress) StartDiscovery() {
-	spinner, _ := pterm.DefaultSpinner.Start("Scanning for PDF files...")
+	spinner, _ := pterm.DefaultSpinner.
+		WithRemoveWhenDone(false).
+		Start("Scanning for PDF files...")
 	p.spinner = spinner
 }
 
@@ -31,7 +56,7 @@ func (p *Progress) StopDiscovery(count int) {
 		if count == 0 {
 			p.spinner.Warning("No PDF files found.")
 		} else {
-			p.spinner.Success(fmt.Sprintf("Found %d PDF files.", count))
+			p.spinner.Success(fmt.Sprintf("Discovered %d PDF files.", count))
 		}
 		p.spinner = nil
 	}
@@ -40,7 +65,13 @@ func (p *Progress) StopDiscovery(count int) {
 // StartConversion starts the progress bar for conversion.
 func (p *Progress) StartConversion(total int) {
 	p.totalCount = total
-	bar, _ := pterm.DefaultProgressbar.WithTotal(total).WithTitle("Converting PDFs").Start()
+	bar, _ := pterm.DefaultProgressbar.
+		WithTotal(total).
+		WithTitle("Converting PDFs").
+		WithBarCharacter("█").
+		WithLastCharacter("█").
+		WithElapsedTimeRoundingFactor(time.Millisecond).
+		Start()
 	p.bar = bar
 }
 
@@ -58,30 +89,55 @@ func (p *Progress) StopConversion() {
 	}
 }
 
-// PrintSummary prints a colorful summary of the conversion.
+// PrintSummary prints a branded summary of the conversion results.
 func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Duration, errCount int) {
-	pterm.DefaultSection.Println("Conversion Summary")
+	pterm.Println() // space before summary
+
+	// Section header with icon
+	pterm.DefaultSection.
+		WithStyle(pterm.NewStyle(pterm.FgLightCyan, pterm.Bold)).
+		Println("📊 Conversion Summary")
 
 	savings := float64(0)
 	if inputBytes > 0 {
 		savings = float64(inputBytes-outputBytes) / float64(inputBytes) * 100
 	}
 
-	// Calculate rough token estimates (4 chars per token)
+	// Token estimates (~4 chars per token)
 	inputTokens := inputBytes / 4
 	outputTokens := outputBytes / 4
 
-	data := [][]string{
-		{"Metric", "Value"},
-		{"Total Processed", fmt.Sprintf("%d", p.totalCount)},
-		{"Errors", fmt.Sprintf("%d", errCount)},
-		{"Duration", duration.String()},
-		{"PDF Source Size", formatBytes(inputBytes) + fmt.Sprintf(" (~%d tokens)", inputTokens)},
-		{"Markdown Size", formatBytes(outputBytes) + fmt.Sprintf(" (~%d tokens)", outputTokens)},
-		{"Token Savings", fmt.Sprintf("~%.1f%% reduction", savings)},
+	// Status row color
+	errStyle := pterm.FgGreen
+	errLabel := "✓ None"
+	if errCount > 0 {
+		errStyle = pterm.FgRed
+		errLabel = fmt.Sprintf("✗ %d failed", errCount)
 	}
 
-	pterm.DefaultTable.WithHasHeader().WithData(data).Render()
+	data := [][]string{
+		{"Metric", "Value"},
+		{"Files Processed", fmt.Sprintf("%d", p.totalCount)},
+		{"Errors", pterm.NewStyle(errStyle).Sprint(errLabel)},
+		{"Duration", duration.Round(time.Millisecond).String()},
+		{"", ""},
+		{"PDF Source Size", formatBytes(inputBytes) + pterm.Gray(14, fmt.Sprintf("  (~%d tokens)", inputTokens))},
+		{"Markdown Output", formatBytes(outputBytes) + pterm.Gray(14, fmt.Sprintf("  (~%d tokens)", outputTokens))},
+		{"Token Savings", pterm.NewStyle(pterm.FgLightGreen, pterm.Bold).Sprintf("▼ %.1f%% reduction", savings)},
+	}
+
+	pterm.DefaultTable.
+		WithHasHeader().
+		WithHeaderStyle(pterm.NewStyle(pterm.FgCyan, pterm.Bold)).
+		WithData(data).
+		Render()
+
+	// Footer
+	pterm.Println()
+	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
+		pterm.Gray(14, fmt.Sprintf("─── %s ───", repoURL)),
+	)
+	pterm.Println()
 }
 
 func formatBytes(b int64) string {

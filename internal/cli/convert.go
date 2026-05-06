@@ -30,6 +30,7 @@ var convertCmd = &cobra.Command{
 		}
 
 		ui := tui.New()
+		ui.PrintBanner()
 		ui.StartDiscovery()
 
 		pdfFiles, err := discovery.FindPDFs(targetDir, recursive)
