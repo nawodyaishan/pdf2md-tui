@@ -32,10 +32,10 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
-# npm distribution binaries (built during CI)
-npm/*/bin/pdf2md-tui
-npm/*/bin/pdf2md-tui.exe
-node_modules/
+# npm distribution binaries (future work — not yet implemented)
+# npm/*/bin/pdf2md-tui
+# npm/*/bin/pdf2md-tui.exe
+# node_modules/
 
 # Environment & secrets
 .env
