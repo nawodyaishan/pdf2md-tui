@@ -105,12 +105,16 @@ func (m *mockDoc) AnalyzePreFlight(samplePages int) (domain.PageAnalysis, error)
 }
 func (m *mockDoc) Close() error { return nil }
 
+type mockTokenizer struct{}
+
+func (m *mockTokenizer) Count(text string) int { return len(strings.Fields(text)) }
+
 func TestConverter_Convert_NoPDF(t *testing.T) {
 	cfg := domain.NewConfig()
 	storage := &mockStorage{writes: make(map[string][]byte)}
 	parser := &mockParser{}
 
-	conv := NewConverterService(cfg, storage, parser)
+	conv := NewConverterService(cfg, storage, parser, &mockTokenizer{})
 	tempDir := t.TempDir()
 
 	res := conv.Convert(filepath.Join(tempDir, "doesnotexist.pdf"), tempDir)
@@ -124,7 +128,7 @@ func TestConverter_Convert_NotAPDF(t *testing.T) {
 	storage := &mockStorage{writes: make(map[string][]byte)}
 	parser := &mockParser{}
 
-	conv := NewConverterService(cfg, storage, parser)
+	conv := NewConverterService(cfg, storage, parser, &mockTokenizer{})
 	tempDir := t.TempDir()
 
 	badPDF := filepath.Join(tempDir, "bad.pdf")

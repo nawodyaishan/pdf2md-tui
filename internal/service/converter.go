@@ -13,17 +13,19 @@ import (
 
 // ConverterService handles the PDF to MD conversion settings and orchestration.
 type ConverterService struct {
-	config  *domain.Config
-	storage domain.PDFStorage
-	parser  domain.PDFParser
+	config    *domain.Config
+	storage   domain.PDFStorage
+	parser    domain.PDFParser
+	tokenizer domain.Tokenizer
 }
 
 // NewConverterService creates a new ConverterService with injected dependencies.
-func NewConverterService(config *domain.Config, storage domain.PDFStorage, parser domain.PDFParser) *ConverterService {
+func NewConverterService(config *domain.Config, storage domain.PDFStorage, parser domain.PDFParser, tokenizer domain.Tokenizer) *ConverterService {
 	return &ConverterService{
-		config:  config,
-		storage: storage,
-		parser:  parser,
+		config:    config,
+		storage:   storage,
+		parser:    parser,
+		tokenizer: tokenizer,
 	}
 }
 
@@ -117,6 +119,12 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 	}
 
 	res.OutputBytes = int64(len(outData))
+	if c.tokenizer != nil {
+		res.OutputTokens = c.tokenizer.Count(string(outData))
+		// For InputTokens, we estimate from InputBytes if we don't have raw text
+		// In a high-quality impl, we could count tokens as we extract text per page
+		res.InputTokens = int(float64(res.InputBytes) / 1024 * 264)
+	}
 	res.Duration = time.Since(start)
 	res.Status = domain.StatusOK
 	return res
