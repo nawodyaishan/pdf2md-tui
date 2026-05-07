@@ -93,7 +93,7 @@ var convertCmd = &cobra.Command{
 			doc, err := parser.OpenDocument(f)
 			if err == nil {
 				_, err = doc.AnalyzePreFlight(3)
-				doc.Close()
+				_ = doc.Close()
 			}
 			if errors.Is(err, domain.ErrRequiresOCR) {
 				ignoredCount++

@@ -53,7 +53,7 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 		res.Err = fmt.Errorf("open pdf: %w", err)
 		return res
 	}
-	defer doc.Close()
+	defer func() { _ = doc.Close() }()
 
 	// Analyze pre-flight
 	_, err = doc.AnalyzePreFlight(3)
@@ -64,12 +64,12 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 	}
 
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("# %s\n\n", baseName))
+	fmt.Fprintf(&buf, "# %s\n\n", baseName)
 
 	var imagesByPage map[int][]domain.ExtractedImage
 	if c.config.ExtractImages {
 		// Ensure output dir is created
-		c.storage.MkdirAll(outDir)
+		_ = c.storage.MkdirAll(outDir)
 		if imgs, err := c.parser.ExtractImages(pdfPath, outDir); err == nil {
 			imagesByPage = make(map[int][]domain.ExtractedImage)
 			for _, img := range imgs {
@@ -87,7 +87,7 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 
 		if c.config.ExtractImages && len(imagesByPage[i]) > 0 {
 			for _, img := range imagesByPage[i] {
-				buf.WriteString(fmt.Sprintf("![image](%s)\n\n", img.Path))
+				fmt.Fprintf(&buf, "![image](%s)\n\n", img.Path)
 			}
 		}
 
