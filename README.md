@@ -19,13 +19,13 @@
 
 `pdf2md-tui` solves this by extracting **structured Markdown** with preserved table layouts alongside an isolated `./images/` directory — the exact format that modern RAG frameworks (LlamaIndex, LangChain) and Vision-Language Models expect.
 
-| Document | Raw PDF (est. tokens) | Clean Markdown (est. tokens) | Savings |
+| Document | Naive VLM / Image Processing (est. API cost) | Clean Markdown (est. token cost) | Context Quality |
 |---|---|---|---|
-| 50-page technical spec | ~3.1M | ~450K | **~85%** |
-| 200-page legal contract | ~12M | ~1.8M | **~85%** |
-| Research paper (12 pages) | ~720K | ~108K | **~85%** |
+| 50-page technical spec | ~42,500 tokens (Image API) | ~15,000 tokens (Clean text) | **Noise-free, structured** |
+| 200-page legal contract | ~170,000 tokens (Image API) | ~60,000 tokens (Clean text) | **Noise-free, structured** |
+| Research paper (12 pages) | ~10,200 tokens (Image API) | ~3,500 tokens (Clean text) | **Noise-free, structured** |
 
-*Token estimates based on ~4 chars/token (GPT-4 tokenizer). Actual savings depend on PDF structure.*
+*Estimates reflect common API token costs for Vision vs. Text ingestion. Actual savings depend on document density and VLM provider.*
 
 **Built for the "Look Twice" methodology** — extract text + isolate images at ingestion time (Phase 1), then let your downstream VLM pipeline handle deep visual reasoning at retrieval time (Phase 2).
 
