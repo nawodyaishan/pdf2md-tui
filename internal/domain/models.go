@@ -37,6 +37,25 @@ type PageAnalysis struct {
 	XObjectCnt int
 }
 
+// Summary is a JSON-serializable report of the conversion session.
+type Summary struct {
+	Converted int           `json:"converted"`
+	Skipped   int           `json:"skipped"`
+	Errors    int           `json:"errors"`
+	Duration  string        `json:"duration"`
+	Files     []FileSummary `json:"files"`
+}
+
+// FileSummary represents the outcome for a single file.
+type FileSummary struct {
+	Input       string `json:"input"`
+	Output      string `json:"output,omitempty"`
+	Status      string `json:"status"` // "ok", "ignored", "error"
+	Error       string `json:"error,omitempty"`
+	InputBytes  int64  `json:"input_bytes"`
+	OutputBytes int64  `json:"output_bytes,omitempty"`
+}
+
 // PDFStorage defines the interface for interacting with the file system.
 type PDFStorage interface {
 	WriteMarkdown(path string, data []byte) error
@@ -54,10 +73,30 @@ type PDFParser interface {
 	OpenDocument(pdfPath string) (PDFDocument, error)
 }
 
+// BlockType defines the structural type of a PageBlock.
+type BlockType string
+
+const (
+	BlockTypeText  BlockType = "text"
+	BlockTypeTable BlockType = "table"
+)
+
+// PageBlock represents a structural element extracted from the PDF.
+type PageBlock struct {
+	Type  BlockType
+	Text  string    // Used if Type == BlockTypeText
+	Table TableData // Used if Type == BlockTypeTable
+}
+
+// TableData represents a structured grid of cells for a table block.
+type TableData struct {
+	Rows [][]string
+}
+
 // PDFDocument represents an open PDF file ready for extraction.
 type PDFDocument interface {
 	NumPages() int
-	ExtractPageText(pageNum int) (string, error)
+	ExtractPageBlocks(pageNum int) ([]PageBlock, error)
 	AnalyzePreFlight(samplePages int) (PageAnalysis, error)
 	Close() error
 }

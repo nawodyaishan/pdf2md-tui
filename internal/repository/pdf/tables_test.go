@@ -1,10 +1,10 @@
 package pdf
 
 import (
-	"strings"
 	"testing"
 
 	ledongpdf "github.com/ledongthuc/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 )
 
 // --- coalesceChars tests ---
@@ -18,7 +18,7 @@ func TestCoalesceChars_Empty(t *testing.T) {
 
 func TestCoalesceChars_SingleCharacter(t *testing.T) {
 	texts := []ledongpdf.Text{
-		{S: "A", X: 10, Y: 100, FontSize: 12},
+		{S: "A", X: 10, Y: 100, FontSize: 12, W: 7},
 	}
 	result := coalesceChars(texts)
 	if len(result) != 1 {
@@ -30,13 +30,13 @@ func TestCoalesceChars_SingleCharacter(t *testing.T) {
 }
 
 func TestCoalesceChars_JoinsAdjacentChars(t *testing.T) {
-	// Simulate "Hello" as 5 characters at 12pt font, ~7pt apart
+	// Simulate "Hello" as 5 characters, each ~7pt wide, placed with no gap
 	texts := []ledongpdf.Text{
-		{S: "H", X: 10, Y: 100, FontSize: 12},
-		{S: "e", X: 17, Y: 100, FontSize: 12},
-		{S: "l", X: 24, Y: 100, FontSize: 12},
-		{S: "l", X: 31, Y: 100, FontSize: 12},
-		{S: "o", X: 38, Y: 100, FontSize: 12},
+		{S: "H", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "e", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "l", X: 24, Y: 100, FontSize: 12, W: 7},
+		{S: "l", X: 31, Y: 100, FontSize: 12, W: 7},
+		{S: "o", X: 38, Y: 100, FontSize: 12, W: 7},
 	}
 	result := coalesceChars(texts)
 	if len(result) != 1 {
@@ -48,12 +48,12 @@ func TestCoalesceChars_JoinsAdjacentChars(t *testing.T) {
 }
 
 func TestCoalesceChars_SplitsDistantChars(t *testing.T) {
-	// Two words "Hi" and "Go" separated by a large gap
+	// Two words "Hi" and "Go" separated by a large gap (176pt)
 	texts := []ledongpdf.Text{
-		{S: "H", X: 10, Y: 100, FontSize: 12},
-		{S: "i", X: 17, Y: 100, FontSize: 12},
-		{S: "G", X: 200, Y: 100, FontSize: 12},
-		{S: "o", X: 207, Y: 100, FontSize: 12},
+		{S: "H", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "i", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "G", X: 200, Y: 100, FontSize: 12, W: 7},
+		{S: "o", X: 207, Y: 100, FontSize: 12, W: 7},
 	}
 	result := coalesceChars(texts)
 	if len(result) != 2 {
@@ -67,12 +67,12 @@ func TestCoalesceChars_SplitsDistantChars(t *testing.T) {
 func TestCoalesceChars_SplitsOnDifferentLines(t *testing.T) {
 	// "Top" on Y=100, "Bot" on Y=80
 	texts := []ledongpdf.Text{
-		{S: "T", X: 10, Y: 100, FontSize: 12},
-		{S: "o", X: 17, Y: 100, FontSize: 12},
-		{S: "p", X: 24, Y: 100, FontSize: 12},
-		{S: "B", X: 10, Y: 80, FontSize: 12},
-		{S: "o", X: 17, Y: 80, FontSize: 12},
-		{S: "t", X: 24, Y: 80, FontSize: 12},
+		{S: "T", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "o", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "p", X: 24, Y: 100, FontSize: 12, W: 7},
+		{S: "B", X: 10, Y: 80, FontSize: 12, W: 7},
+		{S: "o", X: 17, Y: 80, FontSize: 12, W: 7},
+		{S: "t", X: 24, Y: 80, FontSize: 12, W: 7},
 	}
 	result := coalesceChars(texts)
 	if len(result) != 2 {
@@ -85,9 +85,9 @@ func TestCoalesceChars_SplitsOnDifferentLines(t *testing.T) {
 
 func TestCoalesceChars_SkipsEmptyStrings(t *testing.T) {
 	texts := []ledongpdf.Text{
-		{S: "", X: 10, Y: 100, FontSize: 12},
-		{S: "A", X: 20, Y: 100, FontSize: 12},
-		{S: "", X: 30, Y: 100, FontSize: 12},
+		{S: "", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "A", X: 20, Y: 100, FontSize: 12, W: 7},
+		{S: "", X: 30, Y: 100, FontSize: 12, W: 7},
 	}
 	result := coalesceChars(texts)
 	if len(result) != 1 {
@@ -95,6 +95,211 @@ func TestCoalesceChars_SkipsEmptyStrings(t *testing.T) {
 	}
 	if result[0].text != "A" {
 		t.Errorf("expected 'A', got %q", result[0].text)
+	}
+}
+
+// --- New two-threshold tests ---
+
+func TestCoalesceChars_DetectsWordBoundaries(t *testing.T) {
+	// "Hi" and "Go" separated by a gap larger than wordSpace (16pt > 8pt)
+	// H(10,W=7) → rightEdge=17; i(17) → gap=0 → same word "Hi", rightEdge=24
+	// G(40) → gap=40-24=16 > wordSpace=8 → separate word
+	texts := []ledongpdf.Text{
+		{S: "H", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "i", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "G", X: 40, Y: 100, FontSize: 12, W: 7},
+		{S: "o", X: 47, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 words, got %d: %+v", len(result), result)
+	}
+	if result[0].text != "Hi" {
+		t.Errorf("expected word 0 'Hi', got %q", result[0].text)
+	}
+	if result[1].text != "Go" {
+		t.Errorf("expected word 1 'Go', got %q", result[1].text)
+	}
+}
+
+func TestCoalesceChars_InsertsSpaceBetweenWords(t *testing.T) {
+	// "The" then "cert" with a moderate gap: rightEdge of 'e'=31, c at X=38
+	// gap = 38-31 = 7, charSpace=2 < 7 < wordSpace=8 → space insertion
+	texts := []ledongpdf.Text{
+		{S: "T", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "h", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "e", X: 24, Y: 100, FontSize: 12, W: 7},
+		{S: "c", X: 38, Y: 100, FontSize: 12, W: 7},
+		{S: "e", X: 45, Y: 100, FontSize: 12, W: 7},
+		{S: "r", X: 52, Y: 100, FontSize: 12, W: 7},
+		{S: "t", X: 59, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 word, got %d: %+v", len(result), result)
+	}
+	if result[0].text != "The cert" {
+		t.Errorf("expected 'The cert', got %q", result[0].text)
+	}
+}
+
+func TestCoalesceChars_PreservesWordOrder(t *testing.T) {
+	// Three words "First Second Third" on same line, each separated by gap > wordSpace
+	// "First" at X=10..45 (W=7 on 6 chars, rightEdge=45+7=52)
+	// "Second": S at X=68, gap = 68-52 = 16 > wordSpace=8 → separate word
+	// "Third": T at X=128, gap > wordSpace → separate word
+	texts := []ledongpdf.Text{
+		{S: "F", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "i", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "r", X: 24, Y: 100, FontSize: 12, W: 7},
+		{S: "s", X: 31, Y: 100, FontSize: 12, W: 7},
+		{S: "t", X: 38, Y: 100, FontSize: 12, W: 7},
+		{S: "S", X: 68, Y: 100, FontSize: 12, W: 7},
+		{S: "e", X: 75, Y: 100, FontSize: 12, W: 7},
+		{S: "c", X: 82, Y: 100, FontSize: 12, W: 7},
+		{S: "o", X: 89, Y: 100, FontSize: 12, W: 7},
+		{S: "n", X: 96, Y: 100, FontSize: 12, W: 7},
+		{S: "d", X: 103, Y: 100, FontSize: 12, W: 7},
+		{S: "T", X: 128, Y: 100, FontSize: 12, W: 7},
+		{S: "h", X: 135, Y: 100, FontSize: 12, W: 7},
+		{S: "i", X: 142, Y: 100, FontSize: 12, W: 7},
+		{S: "r", X: 149, Y: 100, FontSize: 12, W: 7},
+		{S: "d", X: 156, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 words, got %d: %+v", len(result), result)
+	}
+	if result[0].text != "First" {
+		t.Errorf("expected word 0 'First', got %q", result[0].text)
+	}
+	if result[1].text != "Second" {
+		t.Errorf("expected word 1 'Second', got %q", result[1].text)
+	}
+	if result[2].text != "Third" {
+		t.Errorf("expected word 2 'Third', got %q", result[2].text)
+	}
+}
+
+func TestCoalesceChars_SkipsZeroFontSize(t *testing.T) {
+	// Characters with FontSize=0 are skipped entirely (no update to lastX/lastW).
+	// Gap from A's right edge (17) to C's X (22) = 5, which is < wordSpaceThreshold (5.6),
+	// so a space is inserted between them.
+	texts := []ledongpdf.Text{
+		{S: "A", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "B", X: 17, Y: 100, FontSize: 0, W: 0}, // should be skipped
+		{S: "C", X: 22, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 word, got %d: %+v", len(result), result)
+	}
+	// "A C" — the zero-fontSize character is skipped but gap still produces a space
+	if result[0].text != "A C" {
+		t.Errorf("expected 'A C', got %q", result[0].text)
+	}
+}
+
+func TestCoalesceChars_LargeGapSeparatesWords(t *testing.T) {
+	// Words far apart on same line (> wordSpace) become separate word objects
+	texts := []ledongpdf.Text{
+		{S: "A", X: 10, Y: 100, FontSize: 12, W: 10},
+		{S: "B", X: 200, Y: 100, FontSize: 12, W: 10},
+		{S: "C", X: 210, Y: 100, FontSize: 12, W: 10},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 words, got %d: %+v", len(result), result)
+	}
+	if result[0].text != "A" {
+		t.Errorf("expected word 0 'A', got %q", result[0].text)
+	}
+	if result[1].text != "BC" {
+		t.Errorf("expected word 1 'BC', got %q", result[1].text)
+	}
+}
+
+func TestCoalesceChars_PunctuationNearWords(t *testing.T) {
+	// Punctuation attaches to preceding word
+	// "word" + "." (tight gap) then "Next" (large gap)
+	texts := []ledongpdf.Text{
+		{S: "w", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "o", X: 17, Y: 100, FontSize: 12, W: 7},
+		{S: "r", X: 24, Y: 100, FontSize: 12, W: 7},
+		{S: "d", X: 31, Y: 100, FontSize: 12, W: 7},
+		{S: ".", X: 38, Y: 100, FontSize: 12, W: 4}, // narrow period
+		{S: "N", X: 70, Y: 100, FontSize: 12, W: 7},
+		{S: "e", X: 77, Y: 100, FontSize: 12, W: 7},
+		{S: "x", X: 84, Y: 100, FontSize: 12, W: 7},
+		{S: "t", X: 91, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 words, got %d: %+v", len(result), result)
+	}
+	if result[0].text != "word." {
+		t.Errorf("expected word 0 'word.', got %q", result[0].text)
+	}
+	if result[1].text != "Next" {
+		t.Errorf("expected word 1 'Next', got %q", result[1].text)
+	}
+}
+
+func TestCoalesceChars_HyphenatedTerms(t *testing.T) {
+	// "Asia-Pacific" is a single hyphenated word (all gaps < charSpace)
+	// followed by "specifically" with a moderate gap (charSpace < gap < wordSpace)
+	// right edge after 'c' at X=85,W=7 → 92; s of "specifically" at X=97 → gap=5
+	// charSpace=2 < 5 < wordSpace=8 → space insertion
+	texts := []ledongpdf.Text{
+		{S: "A", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "s", X: 17, Y: 100, FontSize: 12, W: 7}, {S: "i", X: 24, Y: 100, FontSize: 12, W: 7},
+		{S: "a", X: 31, Y: 100, FontSize: 12, W: 7},
+		{S: "-", X: 38, Y: 100, FontSize: 12, W: 5},
+		{S: "P", X: 43, Y: 100, FontSize: 12, W: 7}, {S: "a", X: 50, Y: 100, FontSize: 12, W: 7},
+		{S: "c", X: 57, Y: 100, FontSize: 12, W: 7}, {S: "i", X: 64, Y: 100, FontSize: 12, W: 7},
+		{S: "f", X: 71, Y: 100, FontSize: 12, W: 7}, {S: "i", X: 78, Y: 100, FontSize: 12, W: 7},
+		{S: "c", X: 85, Y: 100, FontSize: 12, W: 7},
+		{S: "s", X: 97, Y: 100, FontSize: 12, W: 7},
+		{S: "p", X: 104, Y: 100, FontSize: 12, W: 7}, {S: "e", X: 111, Y: 100, FontSize: 12, W: 7},
+		{S: "c", X: 118, Y: 100, FontSize: 12, W: 7}, {S: "i", X: 125, Y: 100, FontSize: 12, W: 7},
+		{S: "f", X: 132, Y: 100, FontSize: 12, W: 7}, {S: "i", X: 139, Y: 100, FontSize: 12, W: 7},
+		{S: "c", X: 146, Y: 100, FontSize: 12, W: 7},
+		{S: "a", X: 153, Y: 100, FontSize: 12, W: 7}, {S: "l", X: 160, Y: 100, FontSize: 12, W: 7},
+		{S: "l", X: 167, Y: 100, FontSize: 12, W: 7}, {S: "y", X: 174, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 word, got %d: %+v", len(result), result)
+	}
+	if result[0].text != "Asia-Pacific specifically" {
+		t.Errorf("expected 'Asia-Pacific specifically', got %q", result[0].text)
+	}
+}
+
+func TestCoalesceChars_MixedFontSizes(t *testing.T) {
+	// "Big" (fontSize=24) then "small" (fontSize=12) on same line.
+	// Right edge of "Big": g(38,W=14) → 52.
+	// s at X=65: gap=65-52=13. Thresholds use current char's fontSize (12):
+	//   charSpace=2, wordSpace=8. Since 13 > 8, this is a separate word.
+	texts := []ledongpdf.Text{
+		{S: "B", X: 10, Y: 100, FontSize: 24, W: 14},
+		{S: "i", X: 24, Y: 100, FontSize: 24, W: 14},
+		{S: "g", X: 38, Y: 100, FontSize: 24, W: 14},
+		{S: "s", X: 65, Y: 100, FontSize: 12, W: 7},
+		{S: "m", X: 72, Y: 100, FontSize: 12, W: 7},
+		{S: "a", X: 79, Y: 100, FontSize: 12, W: 7},
+		{S: "l", X: 86, Y: 100, FontSize: 12, W: 7},
+		{S: "l", X: 93, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 words (%dpt + %dpt separated by 13pt gap), got %d: %+v", 24, 12, len(result), result)
+	}
+	if result[0].text != "Big" {
+		t.Errorf("expected word 0 'Big', got %q", result[0].text)
+	}
+	if result[1].text != "small" {
+		t.Errorf("expected word 1 'small', got %q", result[1].text)
 	}
 }
 
@@ -316,65 +521,105 @@ func TestFindTableEnd_BodyTextNotTable(t *testing.T) {
 	}
 }
 
-// --- renderRowsAsMarkdown tests ---
+// --- buildPageBlocks tests ---
 
-func TestRenderRowsAsMarkdown_TableRenderedAsPipe(t *testing.T) {
+func TestBuildPageBlocks_TableRendered(t *testing.T) {
 	rows := []tableRow{
 		{y: 400, cells: []tableCell{{x: 72, text: "Name"}, {x: 250, text: "Age"}, {x: 450, text: "City"}}},
 		{y: 380, cells: []tableCell{{x: 72, text: "Alice"}, {x: 250, text: "30"}, {x: 450, text: "NYC"}}},
 		{y: 360, cells: []tableCell{{x: 72, text: "Bob"}, {x: 250, text: "25"}, {x: 450, text: "LA"}}},
 	}
 
-	result := renderRowsAsMarkdown(rows)
+	blocks := buildPageBlocks(rows)
 
-	if !strings.Contains(result, "| Name") {
-		t.Error("expected pipe table header with 'Name'")
+	if len(blocks) != 1 || blocks[0].Type != domain.BlockTypeTable {
+		t.Fatalf("expected 1 table block, got %d blocks", len(blocks))
 	}
-	if !strings.Contains(result, "| --- |") {
-		t.Error("expected pipe table separator")
+	if len(blocks[0].Table.Rows) != 3 {
+		t.Errorf("expected 3 table rows, got %d", len(blocks[0].Table.Rows))
 	}
-	if !strings.Contains(result, "| Alice") {
-		t.Error("expected pipe table data row with 'Alice'")
+	if blocks[0].Table.Rows[0][0] != "Name" {
+		t.Errorf("expected table header 'Name', got %q", blocks[0].Table.Rows[0][0])
 	}
 }
 
-func TestRenderRowsAsMarkdown_PlainTextNotPiped(t *testing.T) {
+func TestBuildPageBlocks_PlainTextNotTable(t *testing.T) {
 	// Single-column rows should NOT be rendered as table
 	rows := []tableRow{
 		{y: 400, cells: []tableCell{{x: 72, text: "Hello world"}}},
 		{y: 380, cells: []tableCell{{x: 72, text: "Another paragraph"}}},
 	}
 
-	result := renderRowsAsMarkdown(rows)
+	blocks := buildPageBlocks(rows)
 
-	if strings.Contains(result, "|") {
-		t.Errorf("plain text should not contain pipe characters, got %q", result)
+	if len(blocks) != 2 {
+		t.Fatalf("expected 2 text blocks, got %d", len(blocks))
 	}
-	if !strings.Contains(result, "Hello world") {
-		t.Error("expected plain text to be preserved")
+	if blocks[0].Type != domain.BlockTypeText || blocks[0].Text != "Hello world" {
+		t.Errorf("expected text block 'Hello world', got %v", blocks[0])
 	}
 }
 
-func TestRenderRowsAsMarkdown_MixedTableAndText(t *testing.T) {
+func TestBuildPageBlocks_MixedTableAndText(t *testing.T) {
 	rows := []tableRow{
 		// Plain text
 		{y: 500, cells: []tableCell{{x: 72, text: "Intro paragraph"}}},
 		// Table
 		{y: 400, cells: []tableCell{{x: 72, text: "Col1"}, {x: 250, text: "Col2"}, {x: 450, text: "Col3"}}},
 		{y: 380, cells: []tableCell{{x: 72, text: "A"}, {x: 250, text: "B"}, {x: 450, text: "C"}}},
+		{y: 360, cells: []tableCell{{x: 72, text: "D"}, {x: 250, text: "E"}, {x: 450, text: "F"}}},
 		// Plain text after table
 		{y: 300, cells: []tableCell{{x: 72, text: "Conclusion"}}},
 	}
 
-	result := renderRowsAsMarkdown(rows)
+	blocks := buildPageBlocks(rows)
 
-	if !strings.Contains(result, "Intro paragraph") {
-		t.Error("intro text missing")
+	if len(blocks) != 3 {
+		t.Fatalf("expected 3 blocks, got %d", len(blocks))
 	}
-	if !strings.Contains(result, "| Col1") {
-		t.Error("table not rendered with pipes")
+	if blocks[0].Type != domain.BlockTypeText || blocks[0].Text != "Intro paragraph" {
+		t.Error("intro text missing or wrong type")
 	}
-	if !strings.Contains(result, "Conclusion") {
-		t.Error("conclusion text missing")
+	if blocks[1].Type != domain.BlockTypeTable {
+		t.Error("table block missing or wrong type")
+	}
+	if blocks[2].Type != domain.BlockTypeText || blocks[2].Text != "Conclusion" {
+		t.Error("conclusion text missing or wrong type")
+	}
+}
+
+// --- New tests for Phase 2 ---
+
+func TestExtractColumnClusters_GroupsCloseCoordinates(t *testing.T) {
+	cells := []tableCell{
+		{x: 10, text: "A"},
+		{x: 12, text: "B"},
+		{x: 65, text: "C"},
+		{x: 70, text: "D"},
+		{x: 120, text: "E"},
+	}
+	// With minGap 50, {10, 12} -> cluster 10, {65, 70} -> cluster 65, {120} -> cluster 120
+	clusters := extractColumnClusters(cells, 50.0)
+	if len(clusters) != 3 {
+		t.Fatalf("expected 3 clusters, got %d", len(clusters))
+	}
+	if clusters[0] != 10 || clusters[1] != 65 || clusters[2] != 120 {
+		t.Errorf("unexpected clusters: %v", clusters)
+	}
+}
+
+func TestCoalesceChars_StackedCoordinates(t *testing.T) {
+	// Fake bold where the exact same character is printed with a tiny offset
+	texts := []ledongpdf.Text{
+		{S: "A", X: 10.0, Y: 100, FontSize: 12, W: 7},
+		{S: "A", X: 10.1, Y: 100, FontSize: 12, W: 7},
+		{S: "B", X: 17.0, Y: 100, FontSize: 12, W: 7},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 word, got %d", len(result))
+	}
+	if result[0].text != "AB" {
+		t.Errorf("expected 'AB', got %q", result[0].text)
 	}
 }

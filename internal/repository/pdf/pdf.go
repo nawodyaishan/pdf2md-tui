@@ -38,15 +38,14 @@ func (d *document) NumPages() int {
 	return d.reader.NumPage()
 }
 
-func (d *document) ExtractPageText(pageNum int) (string, error) {
+func (d *document) ExtractPageBlocks(pageNum int) ([]domain.PageBlock, error) {
 	page := d.reader.Page(pageNum)
 	if page.V.IsNull() {
-		return "", nil
+		return nil, nil
 	}
 
-	// Fast plain text fallback check happens in `extractWithTables` if needed.
-	// But `extractWithTables` currently always returns the whole page content.
-	return extractWithTables(page), nil
+	blocks := extractPageBlocks(page)
+	return blocks, nil
 }
 
 func (d *document) AnalyzePreFlight(samplePages int) (domain.PageAnalysis, error) {

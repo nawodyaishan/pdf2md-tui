@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -34,17 +35,24 @@ var convertCmd = &cobra.Command{
 		}
 
 		ui := tui.New()
-		ui.PrintBanner()
-		ui.StartDiscovery()
+		if !quiet {
+			ui.PrintBanner()
+			ui.StartDiscovery()
+		}
 
 		pdfFiles, err := discovery.FindPDFs(targetDir, recursive)
-		ui.StopDiscovery(len(pdfFiles))
+		if !quiet {
+			ui.StopDiscovery(len(pdfFiles))
+		}
 
 		if err != nil {
 			return fmt.Errorf("error during discovery: %w", err)
 		}
 
 		if len(pdfFiles) == 0 {
+			if !quiet {
+				ui.PrintNoPDFsFound(targetDir)
+			}
 			return nil
 		}
 
@@ -63,7 +71,7 @@ var convertCmd = &cobra.Command{
 		conv := service.NewConverterService(cfg, store, parser)
 
 		// Pre-flight: detect output files that already exist.
-		if !forceOverwrite {
+		if !forceOverwrite && !quiet {
 			var existing []string
 			for _, f := range pdfFiles {
 				if store.FileExists(conv.OutputPath(f, outDirPath)) {
@@ -86,6 +94,9 @@ var convertCmd = &cobra.Command{
 			}
 		}
 
+		// Results collection for JSON summary
+		var allResults []domain.Result
+
 		// Pre-flight: Detect scanned/image-only PDFs (OCR heuristic)
 		var convertible []string
 		var ignoredCount int
@@ -95,19 +106,26 @@ var convertCmd = &cobra.Command{
 				_, err = doc.AnalyzePreFlight(3)
 				_ = doc.Close()
 			}
+
 			if errors.Is(err, domain.ErrRequiresOCR) {
 				ignoredCount++
-				if verbose {
+				if verbose && !quiet {
 					fmt.Fprintf(os.Stderr, "\nSkipping %s: Requires OCR", f)
 				}
+				allResults = append(allResults, domain.Result{
+					InputPath: f,
+					Status:    domain.StatusIgnored,
+				})
 			} else {
 				convertible = append(convertible, f)
 			}
 		}
 
 		if len(convertible) == 0 {
-			if tui.IsInteractive() {
+			if !quiet {
 				ui.PrintSummary(0, 0, 0, 0, ignoredCount)
+			} else {
+				printJSONSummary(allResults, 0, 0, 0, ignoredCount)
 			}
 			return nil
 		}
@@ -117,10 +135,12 @@ var convertCmd = &cobra.Command{
 			numWorkers = runtime.NumCPU()
 		}
 
-		ui.StartConversion(len(convertible))
+		if !quiet {
+			ui.StartConversion(len(convertible))
+		}
 
 		jobs := make(chan string, len(convertible))
-		results := make(chan domain.Result, len(convertible))
+		workerResults := make(chan domain.Result, len(convertible))
 
 		var wg sync.WaitGroup
 		for w := 0; w < numWorkers; w++ {
@@ -129,8 +149,10 @@ var convertCmd = &cobra.Command{
 				defer wg.Done()
 				for pdf := range jobs {
 					res := conv.Convert(pdf, outDirPath)
-					results <- res
-					ui.Increment()
+					workerResults <- res
+					if !quiet {
+						ui.Increment()
+					}
 				}
 			}()
 		}
@@ -142,17 +164,18 @@ var convertCmd = &cobra.Command{
 
 		go func() {
 			wg.Wait()
-			close(results)
+			close(workerResults)
 		}()
 
 		var totalIn, totalOut int64
-		var totalDur time.Duration // Using simple sum for summary
+		var totalDur time.Duration
 		var errCount int
 
-		for res := range results {
+		for res := range workerResults {
+			allResults = append(allResults, res)
 			if res.Err != nil {
 				errCount++
-				if verbose {
+				if verbose && !quiet {
 					fmt.Fprintf(os.Stderr, "\nError processing %s: %v", res.InputPath, res.Err)
 				}
 			} else {
@@ -162,9 +185,54 @@ var convertCmd = &cobra.Command{
 			}
 		}
 
-		ui.StopConversion()
-		ui.PrintSummary(totalIn, totalOut, totalDur, errCount, ignoredCount)
+		if !quiet {
+			ui.StopConversion()
+			ui.PrintSummary(totalIn, totalOut, totalDur, errCount, ignoredCount)
+		} else {
+			printJSONSummary(allResults, totalIn, totalOut, totalDur, ignoredCount)
+		}
 
+		if errCount > 0 {
+			return errors.New("conversion completed with errors")
+		}
 		return nil
 	},
+}
+
+func printJSONSummary(results []domain.Result, totalIn, totalOut int64, duration time.Duration, ignored int) {
+	summary := domain.Summary{
+		Duration:  duration.String(),
+		Converted: 0,
+		Skipped:   ignored,
+		Errors:    0,
+	}
+
+	for _, res := range results {
+		status := "ok"
+		if res.Status == domain.StatusIgnored {
+			status = "ignored"
+		} else if res.Err != nil {
+			status = "error"
+			summary.Errors++
+		} else {
+			summary.Converted++
+		}
+
+		errMsg := ""
+		if res.Err != nil {
+			errMsg = res.Err.Error()
+		}
+
+		summary.Files = append(summary.Files, domain.FileSummary{
+			Input:       res.InputPath,
+			Output:      res.OutputPath,
+			Status:      status,
+			Error:       errMsg,
+			InputBytes:  res.InputBytes,
+			OutputBytes: res.OutputBytes,
+		})
+	}
+
+	data, _ := json.MarshalIndent(summary, "", "  ")
+	fmt.Println(string(data))
 }

@@ -80,8 +80,8 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 
 	totalPages := doc.NumPages()
 	for i := 1; i <= totalPages; i++ {
-		text, err := doc.ExtractPageText(i)
-		if err != nil || strings.TrimSpace(text) == "" {
+		blocks, err := doc.ExtractPageBlocks(i)
+		if err != nil || len(blocks) == 0 {
 			continue
 		}
 
@@ -90,6 +90,8 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 				fmt.Fprintf(&buf, "![image](%s)\n\n", img.Path)
 			}
 		}
+
+		text := renderMarkdown(blocks)
 
 		if c.config.StripNoise {
 			text = applyLLMOptimizations(text)
@@ -148,4 +150,42 @@ func applyLLMOptimizations(text string) string {
 	text = reSpaces.ReplaceAllString(text, " ")
 
 	return strings.TrimSpace(text)
+}
+
+// renderMarkdown converts PageBlocks to markdown, detecting and formatting tables.
+// Implements Table Fencing (G2) by ensuring tables are surrounded by \n\n.
+func renderMarkdown(blocks []domain.PageBlock) string {
+	var buf strings.Builder
+
+	for _, block := range blocks {
+		switch block.Type {
+		case domain.BlockTypeText:
+			buf.WriteString(block.Text)
+			buf.WriteString("\n")
+		case domain.BlockTypeTable:
+			buf.WriteString("\n\n") // Fencing: blank line before table
+
+			for ri, row := range block.Table.Rows {
+				buf.WriteString("| ")
+				buf.WriteString(strings.Join(row, " | "))
+				buf.WriteString(" |\n")
+
+				// Add separator after first row (header)
+				if ri == 0 {
+					buf.WriteString("|")
+					for range row {
+						buf.WriteString(" --- |")
+					}
+					buf.WriteString("\n")
+				}
+			}
+			buf.WriteString("\n") // Blank line after table (fencing)
+		}
+	}
+
+	// bindHeadersToParagraphs: ensure that Markdown headers are never separated from
+	// their immediately following paragraph by more than one newline.
+	// Regex: header line followed by excessive whitespace before next content
+	re := regexp.MustCompile(`(?m)(^#{1,6}\s+.+\n)\n+`)
+	return re.ReplaceAllString(buf.String(), "$1")
 }
