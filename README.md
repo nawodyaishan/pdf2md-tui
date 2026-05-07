@@ -10,7 +10,7 @@
 ---
 
 <div align="center">
-  <img src="public/banner.jpeg" alt="pdf2md-tui banner" width="600" />
+  <img src="assets/banner.jpeg" alt="pdf2md-tui banner" width="600" />
 </div>
 
 ## Why?
