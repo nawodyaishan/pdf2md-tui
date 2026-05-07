@@ -9,7 +9,20 @@ permissions:
   id-token: write
 
 jobs:
-  # Gate: run tests before releasing anything
+  # Gate: run linting before releasing
+  lint:
+    name: Pre-release lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.9.0
+
+  # Gate: run tests before releasing
   test:
     name: Pre-release tests
     runs-on: ubuntu-latest
@@ -24,7 +37,7 @@ jobs:
 
   release:
     name: GoReleaser
-    needs: [test]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

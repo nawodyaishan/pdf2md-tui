@@ -10,7 +10,7 @@
 ---
 
 <div align="center">
-  <img src="public/banner.jpeg" alt="pdf2md-tui banner" width="600" />
+  <img src="assets/banner.jpeg" alt="pdf2md-tui banner" width="600" />
 </div>
 
 ## Why?
@@ -19,13 +19,13 @@
 
 `pdf2md-tui` solves this by extracting **structured Markdown** with preserved table layouts alongside an isolated `./images/` directory — the exact format that modern RAG frameworks (LlamaIndex, LangChain) and Vision-Language Models expect.
 
-| Document | Raw PDF (est. tokens) | Clean Markdown (est. tokens) | Savings |
+| Document | Naive VLM / Image Processing (est. API cost) | Clean Markdown (est. token cost) | Context Quality |
 |---|---|---|---|
-| 50-page technical spec | ~3.1M | ~450K | **~85%** |
-| 200-page legal contract | ~12M | ~1.8M | **~85%** |
-| Research paper (12 pages) | ~720K | ~108K | **~85%** |
+| 50-page technical spec | ~42,500 tokens (Image API) | ~15,000 tokens (Clean text) | **Noise-free, structured** |
+| 200-page legal contract | ~170,000 tokens (Image API) | ~60,000 tokens (Clean text) | **Noise-free, structured** |
+| Research paper (12 pages) | ~10,200 tokens (Image API) | ~3,500 tokens (Clean text) | **Noise-free, structured** |
 
-*Token estimates based on ~4 chars/token (GPT-4 tokenizer). Actual savings depend on PDF structure.*
+*Estimates reflect common API token costs for Vision vs. Text ingestion. Actual savings depend on document density and VLM provider.*
 
 **Built for the "Look Twice" methodology** — extract text + isolate images at ingestion time (Phase 1), then let your downstream VLM pipeline handle deep visual reasoning at retrieval time (Phase 2).
 
@@ -98,9 +98,55 @@ pdf2md-tui convert ./archive --recursive --strip-noise
 # Use 8 workers, custom output directory, no date suffix, and force overwrite existing files
 pdf2md-tui convert ./papers --workers 8 --output out --date-format none --force
 
+# Extract embedded images and inject markdown links into the output
+pdf2md-tui convert ./docs --extract-images
+
 # Print version and build info
 pdf2md-tui version
 ```
+
+### Go Library Usage
+
+Since the refactoring to Clean Architecture, you can embed the conversion engine directly into your own Go applications.
+
+> [!NOTE]
+> The core logic currently resides in `internal/` packages. To use this in an external module, you should move `internal/domain`, `internal/service`, and `internal/repository` to a public directory like `pkg/` or the root.
+
+```go
+import (
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/storage"
+	"github.com/nawodyaishan/pdf2md-tui/internal/service"
+)
+
+func main() {
+	// 1. Initialize configuration
+	cfg := domain.NewConfig()
+	cfg.ExtractImages = true
+	cfg.StripNoise = true
+
+	// 2. Initialize dependencies (Clean Architecture)
+	store := storage.NewStorage()
+	parser := pdf.NewParser()
+
+	// 3. Initialize the service
+	conv := service.NewConverterService(cfg, store, parser)
+
+	// 4. Run conversion
+	// Convert(pdfPath, outDir) returns a domain.Result
+	res := conv.Convert("input.pdf", "output_dir")
+
+	if res.Err != nil {
+		fmt.Printf("Conversion failed: %v\n", res.Err)
+		return
+	}
+
+	fmt.Printf("Successfully converted %s to %s (Saved %d bytes)\n", 
+		res.InputPath, res.OutputPath, res.InputBytes - res.OutputBytes)
+}
+```
+
 
 ### Flags
 
@@ -112,6 +158,7 @@ pdf2md-tui version
 | `--date-format` | | `2006-01-02` | Date suffix format (Go reference time); `none` disables the suffix |
 | `--force` | `-f` | `false` | Overwrite existing output files without prompting |
 | `--strip-noise` | | `false` | Aggressively remove page numbers, headers/footers, and excess whitespace |
+| `--extract-images` | | `false` | Extract embedded images and inject markdown references |
 | `--verbose` | `-v` | `false` | Print per-file errors to stderr |
 
 ### Output structure
@@ -121,6 +168,12 @@ pdf2md-tui version
 ├── report.pdf
 ├── spec.pdf
 └── md/
+    ├── images/
+    │   ├── report/
+    │   │   ├── report_1_5.png
+    │   │   └── report_2_11.jpg
+    │   └── spec/
+    │       └── spec_1_8.png
     ├── report_2026-05-06.md
     └── spec_2026-05-06.md
 ```
@@ -136,6 +189,21 @@ pdf2md-tui version
 5. **Output** — writes one `.md` file per PDF to the output directory.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed breakdown of the extraction pipeline and concurrency model.
+
+---
+
+## Roadmap Status
+
+- [x] **🛡️ Graceful OCR Detection** — Detect and skip scanned PDFs without failing.
+- [x] **🖼️ Image Extraction Pipeline** — Extract raw images for "Look Twice" VLM workflows.
+- [x] **⚡ Zero-Arg Usability** — Run `pdf2md-tui` in any folder with no arguments.
+- [x] **🏗️ Clean Architecture** — Decoupled domain/service/repository structure for scaling.
+- [ ] **🧱 Chunking-Safe Tables** — Atomic GFM pipe tables for hybrid vector chunkers.
+- [ ] **🔇 CI-Friendly Quiet Mode** — Non-interactive JSON output for automation.
+- [ ] **🔌 MCP Server Wrapper** — Native tool support for Model Context Protocol agents.
+- [ ] **☁️ VLM Cloud Integration** — High-accuracy Markdown generation via GPT-4o/Claude.
+
+See [ROADMAP.md](ROADMAP.md) for the full strategic vision.
 
 ---
 

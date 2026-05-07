@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,9 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nawodyaishan/pdf2md-tui/internal/converter"
-	"github.com/nawodyaishan/pdf2md-tui/internal/discovery"
-	"github.com/nawodyaishan/pdf2md-tui/internal/tui"
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/internal/handler/tui"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/discovery"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/storage"
+	"github.com/nawodyaishan/pdf2md-tui/internal/service"
 	"github.com/spf13/cobra"
 )
 
@@ -49,13 +53,20 @@ var convertCmd = &cobra.Command{
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
-		conv := converter.New(dateFormat, stripNoise)
+		cfg := domain.NewConfig()
+		cfg.DateFormat = dateFormat
+		cfg.StripNoise = stripNoise
+		cfg.ExtractImages = extractImages
+
+		store := storage.NewStorage()
+		parser := pdf.NewParser()
+		conv := service.NewConverterService(cfg, store, parser)
 
 		// Pre-flight: detect output files that already exist.
 		if !forceOverwrite {
 			var existing []string
 			for _, f := range pdfFiles {
-				if _, err := os.Stat(conv.OutputPath(f, outDirPath)); err == nil {
+				if store.FileExists(conv.OutputPath(f, outDirPath)) {
 					existing = append(existing, conv.OutputPath(f, outDirPath))
 				}
 			}
@@ -75,15 +86,41 @@ var convertCmd = &cobra.Command{
 			}
 		}
 
+		// Pre-flight: Detect scanned/image-only PDFs (OCR heuristic)
+		var convertible []string
+		var ignoredCount int
+		for _, f := range pdfFiles {
+			doc, err := parser.OpenDocument(f)
+			if err == nil {
+				_, err = doc.AnalyzePreFlight(3)
+				_ = doc.Close()
+			}
+			if errors.Is(err, domain.ErrRequiresOCR) {
+				ignoredCount++
+				if verbose {
+					fmt.Fprintf(os.Stderr, "\nSkipping %s: Requires OCR", f)
+				}
+			} else {
+				convertible = append(convertible, f)
+			}
+		}
+
+		if len(convertible) == 0 {
+			if tui.IsInteractive() {
+				ui.PrintSummary(0, 0, 0, 0, ignoredCount)
+			}
+			return nil
+		}
+
 		numWorkers := workers
 		if numWorkers <= 0 {
 			numWorkers = runtime.NumCPU()
 		}
 
-		ui.StartConversion(len(pdfFiles))
+		ui.StartConversion(len(convertible))
 
-		jobs := make(chan string, len(pdfFiles))
-		results := make(chan converter.Result, len(pdfFiles))
+		jobs := make(chan string, len(convertible))
+		results := make(chan domain.Result, len(convertible))
 
 		var wg sync.WaitGroup
 		for w := 0; w < numWorkers; w++ {
@@ -98,7 +135,7 @@ var convertCmd = &cobra.Command{
 			}()
 		}
 
-		for _, f := range pdfFiles {
+		for _, f := range convertible {
 			jobs <- f
 		}
 		close(jobs)
@@ -126,7 +163,7 @@ var convertCmd = &cobra.Command{
 		}
 
 		ui.StopConversion()
-		ui.PrintSummary(totalIn, totalOut, totalDur, errCount)
+		ui.PrintSummary(totalIn, totalOut, totalDur, errCount, ignoredCount)
 
 		return nil
 	},

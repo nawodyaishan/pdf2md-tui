@@ -8,31 +8,35 @@
 
 ```
 pdf2md-tui/
+├── assets/                # Static repository assets (banners, logos)
 ├── cmd/pdf2md-tui/        # Binary entry point
-│   └── main.go            # Calls cli.Execute(); nothing else
+│   └── main.go            # Composition Root: wires dependencies and starts CLI
 ├── internal/
-│   ├── cli/               # Cobra command definitions + flag wiring
-│   │   ├── root.go        # Root command; declares all global flags
-│   │   ├── convert.go     # "convert" subcommand — orchestrates the pipeline
-│   │   └── version.go     # "version" subcommand — prints build metadata
-│   ├── converter/         # PDF extraction and Markdown generation
-│   │   ├── converter.go   # Converter struct, Convert(), cleanExtractedText(), applyLLMOptimizations()
-│   │   ├── converter_test.go
-│   │   ├── analyze.go     # [PLANNED] AnalyzePDF() pre-flight heuristic for OCR detection
-│   │   ├── images.go      # [PLANNED] pdfcpu-based image extraction pipeline
-│   │   ├── tables.go      # Positional extraction: coalesceChars → groupIntoRows → renderRowsAsMarkdown
-│   │   └── tables_test.go
-│   ├── discovery/         # File system scanning
-│   │   ├── discovery.go   # FindPDFs(dir, recursive) → []string
-│   │   └── discovery_test.go
-│   └── tui/               # Terminal UI wrappers
-│       ├── progress.go    # pterm: banner, spinner, progress bar, summary table
-│       └── menu.go        # Interactive TUI menu
+│   ├── domain/            # Core Entities & Interfaces (Pure, zero dependencies)
+│   │   ├── config.go      # Configuration entities
+│   │   ├── models.go      # Result, PageAnalysis, ExtractedImage, Interfaces
+│   │   └── errors.go      # Domain-specific sentinel errors (ErrRequiresOCR)
+│   ├── service/           # Application Logic / Use Cases (Depends on domain)
+│   │   ├── converter.go   # ConverterService orchestrating the conversion flow
+│   │   └── converter_test.go
+│   ├── repository/        # Infrastructure / Data Access (Implements domain interfaces)
+│   │   ├── pdf/           # ledongthuc/pdf + pdfcpu implementation
+│   │   │   ├── analyze.go # OCR detection heuristic
+│   │   │   ├── images.go  # Image extraction logic
+│   │   │   ├── tables.go  # Positional text extraction
+│   │   │   └── pdf.go     # Concrete Parser implementation
+│   │   ├── storage/       # File system implementation
+│   │   │   └── storage.go # Concrete Storage implementation
+│   │   └── discovery/     # File scanning implementation
+│   │       └── discovery.go
+│   └── handler/           # External Interfaces / Presentation
+│       ├── cli/           # Cobra command definitions
+│       └── tui/           # pterm: progress bar, menu, summary table
 ├── pkg/
-│   └── version/           # Build-time version variables (injected via ldflags)
-│       └── version.go
-├── testdata/              # Fixture PDFs for integration tests
-└── docs/                  # Internal documentation
+│   └── version/           # Build-time version variables
+├── scripts/               # CI/CD and automation scripts
+├── tools/                 # Auxiliary programs (MCP wrappers, generators)
+└── examples/              # Usage examples for RAG pipelines
 ```
 
 `internal/` packages are not importable by external Go modules. `pkg/version` is exported because GoReleaser tooling may reference it.
@@ -46,50 +50,61 @@ pdf2md-tui convert <dir> [flags]
         │
         ▼
 ┌──────────────────────────────────────┐
-│  internal/cli/convert.go             │
-│  1. Validate <dir> argument          │
-│  2. ui.PrintBanner()                 │
-│  3. ui.StartDiscovery()              │
-│  4. discovery.FindPDFs(dir, -r)      │  ──▶  []string (absolute PDF paths)
-│  5. ui.StopDiscovery(count)          │
-│  6. os.MkdirAll(outDir)              │
-│  7. [PLANNED] Pre-flight analysis    │  ──▶  Partition: convertible vs. OCR-required
-│  8. Launch worker pool               │
-└──────────────────────────────────────┘
-        │
-        ▼  (per worker)
-┌──────────────────────────────────────┐
-│  internal/converter/converter.go     │
-│  Converter.Convert(pdfPath, outDir)  │
-│  1. os.Stat → InputBytes             │
-│  2. pdf.Open (ledongthuc/pdf)        │
-│  3. For each page:                   │
-│     a. extractWithTables(page)       │  ──▶  Markdown with pipe tables
-│     b. fallback: GetPlainText()      │       + cleanExtractedText()
-│     c. applyLLMOptimizations()       │       (if --strip-noise)
-│  4. [PLANNED] extractImages(page)    │  ──▶  ./images/{doc}/ + MD references
-│  5. os.WriteFile → .md file          │
-│  6. Return Result{metrics, error}    │
+│  internal/handler/cli/convert.go     │
+│  1. Parse flags -> domain.Config     │
+│  2. Wire repositories & service      │
+│  3. Discovery -> []string            │
+│  4. Execute conversion service       │
 └──────────────────────────────────────┘
         │
         ▼
 ┌──────────────────────────────────────┐
-│  internal/tui/progress.go            │
-│  PrintSummary(in, out, dur, errors)  │
-│  Shows token savings estimate        │
-│  [PLANNED] Shows ignored/skipped     │
+│  internal/service/converter.go       │
+│  ConverterService.Convert(pdfPath)   │
+│  1. Check cache/status via Storage   │
+│  2. Analyze via Parser (Pre-flight)  │
+│  3. If Image-Only -> Skip (Status)   │
+│  4. Extract Text & Tables            │
+│  5. Extract Images -> MD Injection   │
+│  6. Write MD via Storage             │
+│  7. Return domain.Result             │
+└──────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────┐
+│  internal/handler/tui/progress.go    │
+│  Update UI based on domain.Result    │
 └──────────────────────────────────────┘
 ```
 
 ---
 
+## Clean Architecture Principles
+
+This project strictly follows Clean Architecture to ensure scalability and testability:
+
+1. **Independent of Frameworks**: The core logic (Service) does not depend on Cobra, Pterm, or any specific PDF library.
+2. **Testable**: Business rules (conversion, table detection, OCR heuristics) can be tested without the UI, File System, or PDF libraries via interfaces.
+3. **Independent of UI**: The TUI can be swapped for a Web UI or a REST API without changing the core engine.
+4. **Independent of External Agency**: The business rules don't know anything about the database or external PDF tools.
+
+### Dependency Rule: Inward Flow
+Source code dependencies always point inwards. Nothing in an inner circle can know anything at all about something in an outer circle.
+
+- **`domain`** ← **`service`** ← **`handler`** / **`repository`**
+
+### Composition Root
+`cmd/pdf2md-tui/main.go` acts as the composition root where concrete implementations (repositories) are instantiated and injected into the services.
+
+---
+
 ## Worker Pool
 
-The concurrency model in `cli/convert.go` is a classic fan-out/fan-in pool:
+The concurrency model in `handler/cli/convert.go` is a classic fan-out/fan-in pool:
 
 ```go
 jobs    := make(chan string, len(pdfFiles))   // buffered; all jobs queued before workers start
-results := make(chan converter.Result, len(pdfFiles))
+results := make(chan domain.Result, len(pdfFiles))
 
 var wg sync.WaitGroup
 for w := 0; w < numWorkers; w++ {
@@ -119,7 +134,7 @@ for res := range results { /* aggregate */ }
 
 ## PDF Extraction: Two-Path Strategy
 
-Every page goes through two attempts, in order:
+Every page goes through two attempts, in order (implemented in `repository/pdf`):
 
 ### Path 1 — Positional extraction (`tables.go`)
 
@@ -453,11 +468,11 @@ func TestSomething(t *testing.T) {
 
 | Package | Current | Target | Notes |
 |---------|---------|--------|-------|
-| `converter` (core) | ~70% | **≥ 85%** | Every exported function and every error path |
-| `converter` (tables) | ~80% | **≥ 85%** | All heuristic branches including edge cases |
-| `discovery` | ~90% | **≥ 90%** | Including permission errors |
-| `tui` | 0% | **N/A** | Visual rendering — not unit-testable. Validated via smoke tests. |
-| `cli` | 0% | **≥ 50%** | Integration tests via binary execution |
+| `service` (core) | ~70% | **≥ 85%** | Every exported function and every error path |
+| `repository/pdf` (tables) | ~80% | **≥ 85%** | All heuristic branches including edge cases |
+| `repository/discovery` | ~90% | **≥ 90%** | Including permission errors |
+| `handler/tui` | 0% | **N/A** | Visual rendering — not unit-testable. Validated via smoke tests. |
+| `handler/cli` | 0% | **≥ 50%** | Integration tests via binary execution |
 | **Overall** | ~60% | **≥ 80%** | Enforced in CI via coverage threshold |
 
 ### Coverage Enforcement in CI
@@ -493,9 +508,9 @@ func TestSomething(t *testing.T) {
 ### No Mocks Policy
 
 The project avoids mock frameworks. Instead:
-- **`converter`** and **`discovery`** operate on real temp files (`t.TempDir()`).
-- **`tables.go`** functions accept concrete types (`[]pdf.Text`, `[]word`, `[]tableRow`), making them naturally testable with synthetic data.
-- **TUI** is not unit-tested — it is validated visually via `make run`.
+- **`service`** and **`repository/discovery`** operate on real temp files (`t.TempDir()`).
+- **`tables.go`** functions (in **`repository/pdf`**) accept concrete types (`[]pdf.Text`, `[]word`, `[]tableRow`), making them naturally testable with synthetic data.
+- **TUI** (in **`handler/tui`**) is not unit-tested — it is validated visually via `make run`.
 - If a future interface boundary requires test doubles, prefer hand-written fakes over mock libraries.
 
 ### Race Detection
@@ -517,30 +532,30 @@ This is non-negotiable. The worker pool uses goroutines + channels, and even ben
 
 ### New Extraction Capability (e.g., Image Extraction)
 
-1. Create a new file in `internal/converter/` (e.g., `images.go`).
+1. Create a new file in `internal/repository/pdf/` (if it relates to PDF parsing) or `internal/service/` (if it's a new use case).
 2. Define functions that accept concrete types and return `(result, error)`.
-3. Add configuration to the `Options` struct — never add global variables.
-4. Wire the capability into `Convert()` conditionally based on `Options`.
-5. Write unit tests in `images_test.go` using synthetic data.
-6. Update `cli/convert.go` to pass the new flag to `Options`.
+3. Add configuration to the `domain.Config` struct — never add global variables.
+4. Wire the capability into `ConverterService.Convert()` conditionally based on `Config`.
+5. Write unit tests in the same package using synthetic data.
+6. Update `handler/cli/convert.go` to pass the new flag to `Config`.
 7. Update this document and `CLAUDE.md`.
 
 ### New Input Format (e.g., `.docx`)
 
-1. Add a `Discover<Format>` function in `internal/discovery/` or extend `FindPDFs` to accept a `[]string` of extensions.
-2. Implement a `Convert<Format>` method on `Converter` (or a new struct) returning `Result`.
-3. Wire a format-detection branch in `cli/convert.go` based on file extension.
+1. Add a `Discover<Format>` function in `internal/repository/discovery/` or extend `FindPDFs`.
+2. Implement a `Convert<Format>` method on `ConverterService` (or a new service) returning `domain.Result`.
+3. Wire a format-detection branch in `handler/cli/convert.go` based on file extension.
 4. Add unit tests with fixture files in `testdata/`.
 
 ### New CLI Flag
 
-1. Define the flag variable in `cli/root.go` (persistent) or `cli/convert.go` (command-specific).
-2. Map the flag to the appropriate `Options` field at the call site.
-3. Never read flag variables directly in `converter` or `discovery`.
+1. Define the flag variable in `handler/cli/root.go` (persistent) or `handler/cli/convert.go` (command-specific).
+2. Map the flag to the appropriate `domain.Config` field at the call site.
+3. Never read flag variables directly in `service` or `repository`.
 
 ### New TUI Status (e.g., `StatusIgnored`)
 
-1. Add the status to the `Status` enum in `converter`.
-2. Return it from the appropriate converter function.
-3. In `cli/convert.go`, match on the status in the results aggregation loop.
-4. In `tui/progress.go`, add a display row for the new status.
+1. Add the status to the `Status` enum in `domain`.
+2. Return it from the appropriate service/repository function.
+3. In `handler/cli/convert.go`, match on the status in the results aggregation loop.
+4. In `handler/tui/progress.go`, add a display row for the new status.

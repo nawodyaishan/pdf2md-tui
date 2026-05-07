@@ -1,11 +1,11 @@
-package converter
+package pdf
 
 import (
 	"math"
 	"sort"
 	"strings"
 
-	"github.com/ledongthuc/pdf"
+	ledongpdf "github.com/ledongthuc/pdf"
 )
 
 // word represents a coalesced word with its bounding position.
@@ -29,7 +29,7 @@ type tableCell struct {
 
 // extractWithTables uses positional text data to detect and preserve table structure.
 // Returns the page content as markdown, with tables formatted as pipe tables.
-func extractWithTables(page pdf.Page) string {
+func extractWithTables(page ledongpdf.Page) string {
 	content := page.Content()
 	if len(content.Text) == 0 {
 		return ""
@@ -51,13 +51,13 @@ func extractWithTables(page pdf.Page) string {
 }
 
 // coalesceChars merges individual characters into words based on X proximity and Y alignment.
-func coalesceChars(texts []pdf.Text) []word {
+func coalesceChars(texts []ledongpdf.Text) []word {
 	if len(texts) == 0 {
 		return nil
 	}
 
 	// Sort by Y descending (top to bottom), then X ascending (left to right)
-	sorted := make([]pdf.Text, len(texts))
+	sorted := make([]ledongpdf.Text, len(texts))
 	copy(sorted, texts)
 	sort.Slice(sorted, func(i, j int) bool {
 		if math.Abs(sorted[i].Y-sorted[j].Y) > 1.0 {
