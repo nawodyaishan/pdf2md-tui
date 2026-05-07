@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet tidy snapshot cover run clean help
+.PHONY: build test lint fmt vet tidy snapshot cover run clean release tag help
 
 APP_NAME    := pdf2md-tui
 BIN_DIR     := bin
@@ -35,8 +35,10 @@ test: ## Run the test suite with race detection and coverage
 cover: test ## Open HTML coverage report in the browser
 	go tool cover -html=coverage.out
 
-lint: ## Run golangci-lint
-	golangci-lint run ./...
+lint: ## Run golangci-lint (skips gracefully if not installed)
+	@which golangci-lint >/dev/null 2>&1 \
+		&& golangci-lint run ./... \
+		|| echo "⚠  golangci-lint not found — skipping (install: brew install golangci-lint)"
 
 fmt: ## Format all Go source files
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
@@ -53,6 +55,42 @@ check: fmt vet lint test ## Run all quality checks (fmt, vet, lint, test)
 
 snapshot: ## Build a local GoReleaser snapshot (no publish, no tag required)
 	goreleaser release --snapshot --clean
+
+# Usage: make release V=v1.2.0 MSG="what changed in this release"
+release: ## Tag and push a new release  [V=<version> MSG=<note>]
+ifndef V
+	$(error V is required. Usage: make release V=v1.2.0 MSG="release note")
+endif
+ifndef MSG
+	$(error MSG is required. Usage: make release V=v1.2.0 MSG="release note")
+endif
+	@if ! echo "$(V)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "ERROR: V must be a semver tag like v1.2.0 (got '$(V)')"; exit 1; \
+	fi
+	@if git rev-parse "$(V)" >/dev/null 2>&1; then \
+		echo "ERROR: tag $(V) already exists"; exit 1; \
+	fi
+	@echo "▶ Running pre-release checks (fmt, vet, test)..."
+	@$(MAKE) fmt vet test
+	@echo "▶ Tagging $(V)..."
+	git tag -a "$(V)" -m "$(MSG)"
+	@echo "▶ Pushing tag $(V) → origin (triggers GoReleaser CI)..."
+	git push origin "$(V)"
+	@echo "✓ Released $(V). Monitor: https://github.com/nawodyaishan/pdf2md-tui/actions"
+
+# Usage: make tag V=v1.2.0 MSG="what changed" — tag only, no push
+tag: ## Create an annotated git tag without pushing  [V=<version> MSG=<note>]
+ifndef V
+	$(error V is required. Usage: make tag V=v1.2.0 MSG="release note")
+endif
+ifndef MSG
+	$(error MSG is required. Usage: make tag V=v1.2.0 MSG="release note")
+endif
+	@if ! echo "$(V)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "ERROR: V must be a semver tag like v1.2.0 (got '$(V)')"; exit 1; \
+	fi
+	git tag -a "$(V)" -m "$(MSG)"
+	@echo "✓ Tagged $(V) locally. Run 'git push origin $(V)' to trigger release."
 
 # ── Utilities ──────────────────────────────────────────────────────────────────
 
