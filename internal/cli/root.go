@@ -17,6 +17,7 @@ var (
 	verbose        bool
 	stripNoise     bool
 	forceOverwrite bool
+	extractImages  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -44,6 +45,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().BoolVar(&stripNoise, "strip-noise", false, "Aggressively remove boilerplate for LLM optimization")
 	rootCmd.PersistentFlags().BoolVarP(&forceOverwrite, "force", "f", false, "Overwrite existing output files without prompting")
+	rootCmd.PersistentFlags().BoolVar(&extractImages, "extract-images", false, "Extract embedded images and inject markdown references")
 
 	rootCmd.AddCommand(convertCmd)
 	rootCmd.AddCommand(versionCmd)
@@ -78,6 +80,7 @@ func runInteractiveMenu(cmd *cobra.Command) error {
 	case "convert":
 		recursive = cfg.Recursive
 		stripNoise = cfg.StripNoise
+		extractImages = cfg.ExtractImages
 		return convertCmd.RunE(cmd, []string{cfg.Directory})
 	case "version":
 		return versionCmd.RunE(cmd, nil)

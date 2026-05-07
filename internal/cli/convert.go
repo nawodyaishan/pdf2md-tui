@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,7 +50,7 @@ var convertCmd = &cobra.Command{
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
-		conv := converter.New(dateFormat, stripNoise)
+		conv := converter.New(dateFormat, stripNoise, extractImages)
 
 		// Pre-flight: detect output files that already exist.
 		if !forceOverwrite {
@@ -75,15 +76,36 @@ var convertCmd = &cobra.Command{
 			}
 		}
 
+		// Pre-flight: Detect scanned/image-only PDFs (OCR heuristic)
+		var convertible []string
+		var ignoredCount int
+		for _, f := range pdfFiles {
+			if _, err := converter.AnalyzePDF(f, 3); errors.Is(err, converter.ErrRequiresOCR) {
+				ignoredCount++
+				if verbose {
+					fmt.Fprintf(os.Stderr, "\nSkipping %s: Requires OCR", f)
+				}
+			} else {
+				convertible = append(convertible, f)
+			}
+		}
+
+		if len(convertible) == 0 {
+			if tui.IsInteractive() {
+				ui.PrintSummary(0, 0, 0, 0, ignoredCount)
+			}
+			return nil
+		}
+
 		numWorkers := workers
 		if numWorkers <= 0 {
 			numWorkers = runtime.NumCPU()
 		}
 
-		ui.StartConversion(len(pdfFiles))
+		ui.StartConversion(len(convertible))
 
-		jobs := make(chan string, len(pdfFiles))
-		results := make(chan converter.Result, len(pdfFiles))
+		jobs := make(chan string, len(convertible))
+		results := make(chan converter.Result, len(convertible))
 
 		var wg sync.WaitGroup
 		for w := 0; w < numWorkers; w++ {
@@ -98,7 +120,7 @@ var convertCmd = &cobra.Command{
 			}()
 		}
 
-		for _, f := range pdfFiles {
+		for _, f := range convertible {
 			jobs <- f
 		}
 		close(jobs)
@@ -126,7 +148,7 @@ var convertCmd = &cobra.Command{
 		}
 
 		ui.StopConversion()
-		ui.PrintSummary(totalIn, totalOut, totalDur, errCount)
+		ui.PrintSummary(totalIn, totalOut, totalDur, errCount, ignoredCount)
 
 		return nil
 	},
