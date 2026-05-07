@@ -1,12 +1,12 @@
 # Binaries
 bin/
 tools/bin/
+/pdf2md-tui
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-/pdf2md-tui
 
 # Build & Release artifacts
 dist/
@@ -19,34 +19,21 @@ coverage.out
 coverage.html
 *.test
 *.prof
+test_out/
 
 # Go workspace
 go.work
 go.work.sum
 
-# IDE / Editor
+# IDE / Editor / AI
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
-
-# Internal Docs and Claude Code context file (machine-local AI guidance)
 CLAUDE.md
-internal-docs/
-
-# npm distribution binaries (future work — not yet implemented)
-# npm/*/bin/pdf2md-tui
-# npm/*/bin/pdf2md-tui.exe
-# node_modules/
-
-# Environment & secrets
-.env
-.env.local
-*.pem
-*.key
+task.md
 
 # OS generated
 .DS_Store
@@ -55,7 +42,15 @@ internal-docs/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-testdata
-test_out/
-task.md
+Thumbs.db
+
+# Project Specific
 debug-pdf
+internal-docs/
+testdata/
+
+# Environment & secrets
+.env
+.env.local
+*.pem
+*.key
