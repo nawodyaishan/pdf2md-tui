@@ -17,9 +17,10 @@ func IsInteractive() bool {
 
 // MenuConfig holds conversion parameters collected through the interactive menu.
 type MenuConfig struct {
-	Directory  string
-	Recursive  bool
-	StripNoise bool
+	Directory     string
+	Recursive     bool
+	StripNoise    bool
+	ExtractImages bool
 }
 
 const (
@@ -64,12 +65,14 @@ func promptConvertConfig() (MenuConfig, error) {
 	cfg.Directory = dir
 
 	const (
-		optRecursive  = "Recursive — scan subdirectories"
-		optStripNoise = "Strip noise — remove headers/footers for LLM optimization"
+		optRecursive     = "Recursive — scan subdirectories"
+		optStripNoise    = "Strip noise — remove headers/footers for LLM optimization"
+		optExtractImages = "Extract images — save embedded images and inject markdown links"
 	)
 
 	selected, err := pterm.DefaultInteractiveMultiselect.
-		WithOptions([]string{optRecursive, optStripNoise}).
+		WithOptions([]string{optRecursive, optStripNoise, optExtractImages}).
+		WithDefaultOptions([]string{optExtractImages}).
 		Show("Options")
 	if err != nil {
 		return cfg, err
@@ -81,6 +84,8 @@ func promptConvertConfig() (MenuConfig, error) {
 			cfg.Recursive = true
 		case optStripNoise:
 			cfg.StripNoise = true
+		case optExtractImages:
+			cfg.ExtractImages = true
 		}
 	}
 

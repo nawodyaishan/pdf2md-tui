@@ -98,6 +98,9 @@ pdf2md-tui convert ./archive --recursive --strip-noise
 # Use 8 workers, custom output directory, no date suffix, and force overwrite existing files
 pdf2md-tui convert ./papers --workers 8 --output out --date-format none --force
 
+# Extract embedded images and inject markdown links into the output
+pdf2md-tui convert ./docs --extract-images
+
 # Print version and build info
 pdf2md-tui version
 ```
@@ -112,6 +115,7 @@ pdf2md-tui version
 | `--date-format` | | `2006-01-02` | Date suffix format (Go reference time); `none` disables the suffix |
 | `--force` | `-f` | `false` | Overwrite existing output files without prompting |
 | `--strip-noise` | | `false` | Aggressively remove page numbers, headers/footers, and excess whitespace |
+| `--extract-images` | | `false` | Extract embedded images and inject markdown references |
 | `--verbose` | `-v` | `false` | Print per-file errors to stderr |
 
 ### Output structure
@@ -121,6 +125,12 @@ pdf2md-tui version
 ├── report.pdf
 ├── spec.pdf
 └── md/
+    ├── images/
+    │   ├── report/
+    │   │   ├── report_1_5.png
+    │   │   └── report_2_11.jpg
+    │   └── spec/
+    │       └── spec_1_8.png
     ├── report_2026-05-06.md
     └── spec_2026-05-06.md
 ```

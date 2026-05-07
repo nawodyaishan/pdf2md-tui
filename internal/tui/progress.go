@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
@@ -91,7 +92,7 @@ func (p *Progress) StopConversion() {
 }
 
 // PrintSummary prints a branded summary of the conversion results.
-func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Duration, errCount int) {
+func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Duration, errCount, ignoredCount int) {
 	pterm.Println() // space before summary
 
 	// Section header with icon
@@ -111,15 +112,24 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 	// Status row color
 	errStyle := pterm.FgGreen
 	errLabel := "✓ None"
-	if errCount > 0 {
-		errStyle = pterm.FgRed
-		errLabel = fmt.Sprintf("✗ %d failed", errCount)
+	
+	if errCount > 0 || ignoredCount > 0 {
+		errStyle = pterm.FgYellow
+		var labels []string
+		if errCount > 0 {
+			labels = append(labels, fmt.Sprintf("%d failed", errCount))
+			errStyle = pterm.FgRed
+		}
+		if ignoredCount > 0 {
+			labels = append(labels, fmt.Sprintf("%d skipped (OCR req)", ignoredCount))
+		}
+		errLabel = "✗ " + strings.Join(labels, ", ")
 	}
 
 	data := [][]string{
 		{"Metric", "Value"},
 		{"Files Processed", fmt.Sprintf("%d", p.totalCount)},
-		{"Errors", pterm.NewStyle(errStyle).Sprint(errLabel)},
+		{"Errors / Ignored", pterm.NewStyle(errStyle).Sprint(errLabel)},
 		{"Duration", duration.Round(time.Millisecond).String()},
 		{"", ""},
 		{"PDF Source Size", formatBytes(inputBytes) + pterm.Gray(fmt.Sprintf("  (~%d tokens)", inputTokens))},

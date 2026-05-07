@@ -55,3 +55,4 @@ internal-docs/
 .Trashes
 ehthumbs.db
 testdata
+test_out/
