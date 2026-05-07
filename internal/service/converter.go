@@ -1,108 +1,97 @@
-package converter
+package service
 
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/ledongthuc/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 )
 
-// Converter handles the PDF to MD conversion settings.
-type Converter struct {
-	DateFormat    string
-	StripNoise    bool
-	ExtractImages bool
+// ConverterService handles the PDF to MD conversion settings and orchestration.
+type ConverterService struct {
+	config  *domain.Config
+	storage domain.PDFStorage
+	parser  domain.PDFParser
 }
 
-// Result holds metrics and results of a conversion.
-type Result struct {
-	InputPath   string
-	OutputPath  string
-	InputBytes  int64
-	OutputBytes int64
-	Duration    time.Duration
-	Status      Status
-	Err         error
-}
-
-// New creates a new Converter.
-func New(dateFormat string, stripNoise, extractImages bool) *Converter {
-	if dateFormat == "" {
-		dateFormat = "2006-01-02"
-	}
-	return &Converter{
-		DateFormat:    dateFormat,
-		StripNoise:    stripNoise,
-		ExtractImages: extractImages,
+// NewConverterService creates a new ConverterService with injected dependencies.
+func NewConverterService(config *domain.Config, storage domain.PDFStorage, parser domain.PDFParser) *ConverterService {
+	return &ConverterService{
+		config:  config,
+		storage: storage,
+		parser:  parser,
 	}
 }
 
 // Convert processes a single PDF file into LLM-friendly Markdown.
-func (c *Converter) Convert(pdfPath, outDir string) Result {
+func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 	start := time.Now()
-	res := Result{
+	res := domain.Result{
 		InputPath: pdfPath,
 	}
 
-	info, err := os.Stat(pdfPath)
+	size, err := c.storage.StatSize(pdfPath)
 	if err != nil {
-		res.Status = StatusError
+		res.Status = domain.StatusError
 		res.Err = fmt.Errorf("stat: %w", err)
 		return res
 	}
-	res.InputBytes = info.Size()
+	res.InputBytes = size
 
-	baseName, outFile := outputFilename(pdfPath, c.DateFormat, start)
+	baseName, outFile := outputFilename(pdfPath, c.config.DateFormat, start)
 	res.OutputPath = filepath.Join(outDir, outFile)
 
-	// Open PDF using ledongthuc/pdf which handles font decoding and glyph mapping
-	f, reader, err := pdf.Open(pdfPath)
+	// Pre-flight check (if not extracting images, or as a general OCR heuristic)
+	// We'll open the document once, and use it.
+	doc, err := c.parser.OpenDocument(pdfPath)
 	if err != nil {
-		res.Status = StatusError
+		res.Status = domain.StatusError
 		res.Err = fmt.Errorf("open pdf: %w", err)
 		return res
 	}
-	defer func() { _ = f.Close() }()
+	defer doc.Close()
+
+	// Analyze pre-flight
+	_, err = doc.AnalyzePreFlight(3)
+	if err == domain.ErrRequiresOCR {
+		res.Status = domain.StatusIgnored
+		res.Err = domain.ErrRequiresOCR
+		return res
+	}
 
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("# %s\n\n", baseName))
 
-	var imagesByPage map[int][]ExtractedImage
-	if c.ExtractImages {
-		if imgs, err := ExtractImages(pdfPath, outDir); err == nil {
-			imagesByPage = make(map[int][]ExtractedImage)
+	var imagesByPage map[int][]domain.ExtractedImage
+	if c.config.ExtractImages {
+		// Ensure output dir is created
+		c.storage.MkdirAll(outDir)
+		if imgs, err := c.parser.ExtractImages(pdfPath, outDir); err == nil {
+			imagesByPage = make(map[int][]domain.ExtractedImage)
 			for _, img := range imgs {
 				imagesByPage[img.PageNumber] = append(imagesByPage[img.PageNumber], img)
-			}
-		} else {
-			// If image extraction fails, we can just continue with text extraction
-			if os.Getenv("DEBUG") != "" {
-				fmt.Fprintf(os.Stderr, "failed to extract images: %v\n", err)
 			}
 		}
 	}
 
-	totalPages := reader.NumPage()
+	totalPages := doc.NumPages()
 	for i := 1; i <= totalPages; i++ {
-		page := reader.Page(i)
-		if page.V.IsNull() {
+		text, err := doc.ExtractPageText(i)
+		if err != nil || strings.TrimSpace(text) == "" {
 			continue
 		}
 
-		text := safeExtractPage(page)
-
-		if c.ExtractImages && len(imagesByPage[i]) > 0 {
+		if c.config.ExtractImages && len(imagesByPage[i]) > 0 {
 			for _, img := range imagesByPage[i] {
 				buf.WriteString(fmt.Sprintf("![image](%s)\n\n", img.Path))
 			}
 		}
 
-		if c.StripNoise {
+		if c.config.StripNoise {
 			text = applyLLMOptimizations(text)
 		}
 
@@ -113,30 +102,22 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	}
 
 	outData := buf.Bytes()
-	if err := os.WriteFile(res.OutputPath, outData, 0644); err != nil {
-		res.Status = StatusError
+	if err := c.storage.MkdirAll(outDir); err != nil {
+		res.Status = domain.StatusError
+		res.Err = fmt.Errorf("mkdir outDir: %w", err)
+		return res
+	}
+
+	if err := c.storage.WriteMarkdown(res.OutputPath, outData); err != nil {
+		res.Status = domain.StatusError
 		res.Err = fmt.Errorf("write md: %w", err)
 		return res
 	}
 
 	res.OutputBytes = int64(len(outData))
 	res.Duration = time.Since(start)
+	res.Status = domain.StatusOK
 	return res
-}
-
-// safeExtractPage extracts text from a single PDF page, recovering from any panic
-// the ledongthuc/pdf library may raise on malformed content streams (e.g.
-// "malformed hex string", "unexpected EOF"). A panicking page yields "" so the
-// rest of the document and the batch continue unaffected.
-func safeExtractPage(page pdf.Page) (out string) {
-	defer func() { recover() }() //nolint:errcheck
-	out = extractWithTables(page)
-	if strings.TrimSpace(out) == "" {
-		if plainText, err := page.GetPlainText(nil); err == nil {
-			out = cleanExtractedText(plainText)
-		}
-	}
-	return out
 }
 
 // outputFilename returns the document base name and the full output filename for a PDF.
@@ -151,45 +132,9 @@ func outputFilename(pdfPath, dateFormat string, now time.Time) (baseName, filena
 
 // OutputPath returns the expected output path for a PDF without performing conversion.
 // Used by the CLI for pre-flight overwrite checks.
-func (c *Converter) OutputPath(pdfPath, outDir string) string {
-	_, filename := outputFilename(pdfPath, c.DateFormat, time.Now())
+func (c *ConverterService) OutputPath(pdfPath, outDir string) string {
+	_, filename := outputFilename(pdfPath, c.config.DateFormat, time.Now())
 	return filepath.Join(outDir, filename)
-}
-
-// cleanExtractedText joins word fragments that ledongthuc/pdf separates with newlines.
-// The library outputs each word on its own line with single-space lines as separators:
-//
-//	"Hello\n \nWorld\n"   → "Hello World"
-//
-// Truly empty lines (no space) signal paragraph breaks.
-func cleanExtractedText(text string) string {
-	lines := strings.Split(text, "\n")
-	var paragraphs []string
-	var currentWords []string
-
-	for _, line := range lines {
-		// A line that is exactly a single space is a word separator from the library
-		if line == " " {
-			continue // skip — the preceding/following non-empty lines are the words
-		}
-
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			// Truly empty line = paragraph break
-			if len(currentWords) > 0 {
-				paragraphs = append(paragraphs, strings.Join(currentWords, " "))
-				currentWords = nil
-			}
-			continue
-		}
-		currentWords = append(currentWords, trimmed)
-	}
-	// Flush remaining words
-	if len(currentWords) > 0 {
-		paragraphs = append(paragraphs, strings.Join(currentWords, " "))
-	}
-
-	return strings.TrimSpace(strings.Join(paragraphs, "\n\n"))
 }
 
 // applyLLMOptimizations aggressively strips noise for LLM consumption.

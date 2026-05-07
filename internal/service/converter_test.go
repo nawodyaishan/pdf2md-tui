@@ -1,50 +1,13 @@
-package converter
+package service
 
 import (
-	"os"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/ledongthuc/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 )
-
-func TestCleanExtractedText(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{
-			name: "word-per-line rejoining",
-			in:   "Hello\n \nWorld\n \nTest\n",
-			want: "Hello World Test",
-		},
-		{
-			name: "paragraph breaks on empty lines",
-			in:   "First\n \nparagraph\n\nSecond\n \nparagraph\n",
-			want: "First paragraph\n\nSecond paragraph",
-		},
-		{
-			name: "empty input",
-			in:   "",
-			want: "",
-		},
-		{
-			name: "whitespace only",
-			in:   "  \n \n  \n",
-			want: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cleanExtractedText(tt.in); got != tt.want {
-				t.Errorf("cleanExtractedText() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestApplyLLMOptimizations(t *testing.T) {
 	tests := []struct {
@@ -73,8 +36,54 @@ func TestApplyLLMOptimizations(t *testing.T) {
 	}
 }
 
+// Mocks
+
+type mockStorage struct {
+	writes map[string][]byte
+}
+
+func (m *mockStorage) WriteMarkdown(path string, data []byte) error {
+	m.writes[path] = data
+	return nil
+}
+func (m *mockStorage) CreateImageDir(baseName string) (string, error) { return "", nil }
+func (m *mockStorage) ReadImageDir(dir string) ([]string, error)      { return nil, nil }
+func (m *mockStorage) FileExists(path string) bool                    { return false }
+func (m *mockStorage) MkdirAll(path string) error                     { return nil }
+func (m *mockStorage) StatSize(path string) (int64, error) {
+	if strings.Contains(path, "doesnotexist") {
+		return 0, errors.New("not found")
+	}
+	return 100, nil
+}
+
+type mockParser struct{}
+
+func (m *mockParser) ExtractImages(pdfPath string, imgDir string) ([]domain.ExtractedImage, error) {
+	return nil, nil
+}
+func (m *mockParser) OpenDocument(pdfPath string) (domain.PDFDocument, error) {
+	if strings.Contains(pdfPath, "bad") {
+		return nil, errors.New("open pdf: bad format")
+	}
+	return &mockDoc{}, nil
+}
+
+type mockDoc struct{}
+
+func (m *mockDoc) NumPages() int                               { return 1 }
+func (m *mockDoc) ExtractPageText(pageNum int) (string, error) { return "Test text", nil }
+func (m *mockDoc) AnalyzePreFlight(samplePages int) (domain.PageAnalysis, error) {
+	return domain.PageAnalysis{}, nil
+}
+func (m *mockDoc) Close() error { return nil }
+
 func TestConverter_Convert_NoPDF(t *testing.T) {
-	conv := New("2006-01-02", true, false)
+	cfg := domain.NewConfig()
+	storage := &mockStorage{writes: make(map[string][]byte)}
+	parser := &mockParser{}
+
+	conv := NewConverterService(cfg, storage, parser)
 	tempDir := t.TempDir()
 
 	res := conv.Convert(filepath.Join(tempDir, "doesnotexist.pdf"), tempDir)
@@ -83,70 +92,15 @@ func TestConverter_Convert_NoPDF(t *testing.T) {
 	}
 }
 
-// TestSafeExtractPage_PanicRecovery verifies that safeExtractPage catches panics
-// from the pdf library (e.g. malformed hex string, unexpected EOF) and returns
-// an empty string instead of crashing the worker goroutine.
-func TestSafeExtractPage_PanicRecovery(t *testing.T) {
-	// panicExtract mimics extractWithTables panicking on a malformed page stream.
-	// We verify the recovery pattern by injecting a panic via a zero-value Page
-	// whose Content() call dereferences uninitialized internal state.
-	//
-	// Because pdf.Page is a concrete library type we cannot mock it, so we test
-	// the recovery mechanism directly using the same defer/recover closure.
-	recovered := false
-	result := func() (out string) {
-		defer func() {
-			if r := recover(); r != nil {
-				recovered = true
-			}
-		}()
-		// Simulate the exact panics observed in production:
-		//   "malformed PDF: reading at offset 7832: unexpected EOF"
-		//   "malformed hex string ..."
-		panic("malformed PDF: reading at offset 7832: unexpected EOF")
-	}()
-
-	if !recovered {
-		t.Fatal("expected the recovery closure to catch the panic")
-	}
-	if result != "" {
-		t.Errorf("panicking page should yield empty string, got %q", result)
-	}
-}
-
-// TestSafeExtractPage_NoPanic verifies that safeExtractPage passes through
-// normal (non-panicking) execution correctly.
-func TestSafeExtractPage_NoPanic(t *testing.T) {
-	// A zero-value pdf.Page has no content; safeExtractPage should return ""
-	// cleanly (the ledongthuc library may panic or return empty — either is safe).
-	var zeroPanic bool
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				zeroPanic = true
-			}
-		}()
-		// If the zero-value page panics safeExtractPage must catch it; if it
-		// doesn't panic it should simply return "".  Both outcomes are correct.
-		_ = safeExtractPage(pdf.Page{})
-	}()
-
-	// Whether or not the zero-value page panics internally, the outer caller
-	// must never observe a panic from safeExtractPage.
-	if zeroPanic {
-		t.Error("safeExtractPage leaked a panic to the caller")
-	}
-}
-
 func TestConverter_Convert_NotAPDF(t *testing.T) {
-	conv := New("2006-01-02", false, false)
+	cfg := domain.NewConfig()
+	storage := &mockStorage{writes: make(map[string][]byte)}
+	parser := &mockParser{}
+
+	conv := NewConverterService(cfg, storage, parser)
 	tempDir := t.TempDir()
 
 	badPDF := filepath.Join(tempDir, "bad.pdf")
-	if err := os.WriteFile(badPDF, []byte("this is not a real pdf"), 0644); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
-
 	res := conv.Convert(badPDF, tempDir)
 	if res.Err == nil {
 		t.Error("expected error for invalid pdf format, got nil")
