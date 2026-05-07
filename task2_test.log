@@ -1,17 +1,0 @@
-[90m2026-05-08 02:27:51[0m [1;32m[1;32mINFO [0m[0m Conversion session started
-                      └ [1;32m[1;32mtime: [0m[0m2026-05-08T02:27:51+05:30
-                                                                                [90m2026-05-08 02:27:51[0m [1;32m[1;32mINFO [0m[0m Successfully converted file
-                      ├ [1;32m[1;32mfile: [0m[0mtestdata/Strategic Career Plan Review v1 copy.pdf
-                      ├ [1;32m[1;32min: [0m[0m159.5 KB
-                      ├ [1;32m[1;32mout: [0m[0m24.4 KB
-                      └ [1;32m[1;32mdur: [0m[0m110ms
-                                                                                [90m2026-05-08 02:27:51[0m [1;32m[1;32mINFO [0m[0m Successfully converted file
-                      ├ [1;32m[1;32mfile: [0m[0mtestdata/Master_Action_Plan_Nawodya.pdf
-                      ├ [1;32m[1;32min: [0m[0m327.7 KB
-                      ├ [1;32m[1;32mout: [0m[0m44.3 KB
-                      └ [1;32m[1;32mdur: [0m[0m494ms
-[90m2026-05-08 02:27:52[0m [1;32m[1;32mINFO [0m[0m Successfully converted file
-                      ├ [1;32m[1;32mfile: [0m[0mtestdata/Clean Code by Robert Cecil Martin.pdf
-                      ├ [1;32m[1;32min: [0m[0m2.8 MB
-                      ├ [1;32m[1;32mout: [0m[0m898.5 KB
-                      └ [1;32m[1;32mdur: [0m[0m1.25s
