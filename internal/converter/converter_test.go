@@ -74,7 +74,7 @@ func TestApplyLLMOptimizations(t *testing.T) {
 }
 
 func TestConverter_Convert_NoPDF(t *testing.T) {
-	conv := New("2006-01-02", true)
+	conv := New("2006-01-02", true, false)
 	tempDir := t.TempDir()
 
 	res := conv.Convert(filepath.Join(tempDir, "doesnotexist.pdf"), tempDir)
@@ -139,7 +139,7 @@ func TestSafeExtractPage_NoPanic(t *testing.T) {
 }
 
 func TestConverter_Convert_NotAPDF(t *testing.T) {
-	conv := New("2006-01-02", false)
+	conv := New("2006-01-02", false, false)
 	tempDir := t.TempDir()
 
 	badPDF := filepath.Join(tempDir, "bad.pdf")
