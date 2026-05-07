@@ -33,8 +33,8 @@ type ExtractedImage struct {
 
 // PageAnalysis represents the result of pre-flight analysis for a single page.
 type PageAnalysis struct {
-	CharCount   int
-	XObjectCnt  int
+	CharCount  int
+	XObjectCnt int
 }
 
 // PDFStorage defines the interface for interacting with the file system.
@@ -50,6 +50,14 @@ type PDFStorage interface {
 // PDFParser defines the interface for reading and parsing PDFs.
 // This isolates the specific PDF library dependencies.
 type PDFParser interface {
-	ExtractImages(pdfPath string, imgDir string) error
-	// (Additional parsing methods will be defined as we migrate the service)
+	ExtractImages(pdfPath string, imgDir string) ([]ExtractedImage, error)
+	OpenDocument(pdfPath string) (PDFDocument, error)
+}
+
+// PDFDocument represents an open PDF file ready for extraction.
+type PDFDocument interface {
+	NumPages() int
+	ExtractPageText(pageNum int) (string, error)
+	AnalyzePreFlight(samplePages int) (PageAnalysis, error)
+	Close() error
 }
