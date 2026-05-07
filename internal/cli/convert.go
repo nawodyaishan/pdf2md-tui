@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/nawodyaishan/pdf2md-tui/internal/converter"
 	"github.com/nawodyaishan/pdf2md-tui/internal/discovery"
 	"github.com/nawodyaishan/pdf2md-tui/internal/tui"
+	"github.com/spf13/cobra"
 )
 
 var convertCmd = &cobra.Command{

@@ -1,6 +1,6 @@
 # pdf2md-tui
 
-> Batch-convert PDFs to LLM-optimized Markdown — Go CLI with a live TUI, worker pool concurrency, and table detection.
+> High-speed PDF → Markdown ingestion engine for multimodal RAG pipelines. Extracts structured text + isolated images so downstream chunkers, LlamaIndex, and VLM agents get context that actually works.
 
 [![CI](https://github.com/nawodyaishan/pdf2md-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/nawodyaishan/pdf2md-tui/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nawodyaishan/pdf2md-tui)](go.mod)
@@ -15,9 +15,9 @@
 
 ## Why?
 
-**PDFs are among the worst formats for LLM consumption.** Binary encoding, embedded fonts, layout metadata, headers, footers, and page-break artifacts all inflate token counts and degrade context quality. A 50-page PDF can burn 3–5× more tokens than the equivalent clean Markdown.
+**PDFs break AI pipelines.** Binary encoding, embedded fonts, and layout metadata inflate token counts — but the real damage is structural. Legacy parsers flatten documents into raw text, destroying tables, orphaning image references, and producing vector embeddings that are functionally useless for retrieval.
 
-`pdf2md-tui` extracts only the **semantic text content** and writes minimal, clean Markdown — every token carries meaning.
+`pdf2md-tui` solves this by extracting **structured Markdown** with preserved table layouts alongside an isolated `./images/` directory — the exact format that modern RAG frameworks (LlamaIndex, LangChain) and Vision-Language Models expect.
 
 | Document | Raw PDF (est. tokens) | Clean Markdown (est. tokens) | Savings |
 |---|---|---|---|
@@ -27,26 +27,29 @@
 
 *Token estimates based on ~4 chars/token (GPT-4 tokenizer). Actual savings depend on PDF structure.*
 
+**Built for the "Look Twice" methodology** — extract text + isolate images at ingestion time (Phase 1), then let your downstream VLM pipeline handle deep visual reasoning at retrieval time (Phase 2).
+
 **Use cases:**
 
-- Preprocessing document archives for RAG (Retrieval-Augmented Generation) pipelines
-- Building LLM fine-tuning datasets from PDF collections
+- Preprocessing document archives for RAG pipelines (LlamaIndex `SimpleDirectoryReader` compatible)
+- Building multimodal knowledge bases with text + image vector stores
+- Feeding autonomous AI agents via MCP with structured, parseable document context
 - Reducing token costs when processing large document sets via API
-- Converting research papers for AI-assisted literature review
 
 ---
 
 ## Features
 
-- **Live TUI** — animated spinner, progress bar, and a token-savings summary table on completion
-- **Interactive Menu** — simply run `pdf2md-tui` without arguments to launch a guided configuration wizard
+- **Chunking-safe tables** — positional text analysis detects column alignment and emits GFM pipe tables as indivisible atomic units, preventing downstream chunkers from destroying table integrity
+- **Two-path extraction** — positional extraction first (preserves structure); falls back to plain-text for edge cases
 - **Worker pool** — concurrent conversion using `runtime.NumCPU()` workers by default; configurable via `--workers`
-- **Table detection** — positional text analysis coalesces characters into words, groups rows, and detects column alignment to emit GFM pipe tables
-- **Two-path extraction** — positional extraction first; falls back to plain-text for image-heavy pages
+- **Live TUI** — animated spinner, progress bar, and a context-quality summary table on completion
+- **Interactive Menu** — run `pdf2md-tui` without arguments to launch a guided configuration wizard
+- **Graceful OCR detection** — scanned/image-only PDFs are detected and skipped cleanly, reported in the summary (no empty output files)
 - **`--strip-noise`** — aggressively removes page numbers, repeated headers/footers, and excess whitespace for maximum token density
 - **Smart Overwrites** — interactively prompts before overwriting existing files, bypassed via `--force`
 - **Date-stamped outputs** — `report_2026-05-06.md` so you always know which version was processed
-- **Single static binary** — no runtime dependencies; CGO disabled
+- **Single static binary** — no runtime dependencies; `CGO_ENABLED=0`, pure Go
 
 ---
 
@@ -153,7 +156,13 @@ make help           # list all targets
 
 ## Roadmap
 
-Near-term planned features include a `--quiet` flag for CI use, `.txt`/`.docx` ingestion, and JSON output format. Mid-term work includes an OCR fallback for scanned PDFs. See [ROADMAP.md](ROADMAP.md) for the full picture and how to contribute.
+The roadmap is organized around maximizing **context quality** for downstream AI pipelines:
+
+- **Near-term (v0.x)** — Image extraction pipeline (`pdfcpu`), graceful OCR detection, chunking-safe table output, `--quiet` JSON mode for CI/MCP
+- **Mid-term (v1.x)** — "Look Twice" VLM pipeline (cloud vision providers), MCP server prototype, `.docx`/`.txt` ingestion
+- **Long-term (v2.x)** — Pluggable post-processors, full MCP server + REST API
+
+See [ROADMAP.md](ROADMAP.md) for the full vision, strategic goals, and how to contribute.
 
 ---
 

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nawodyaishan/pdf2md-tui/internal/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/nawodyaishan/pdf2md-tui/internal/tui"
 )
 
 var (

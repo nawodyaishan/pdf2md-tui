@@ -74,17 +74,7 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 			continue
 		}
 
-		// Try positional extraction first (preserves tables)
-		text := extractWithTables(page)
-
-		// Fallback to plain text if positional extraction yields nothing
-		if strings.TrimSpace(text) == "" {
-			plainText, err := page.GetPlainText(nil)
-			if err != nil {
-				continue
-			}
-			text = cleanExtractedText(plainText)
-		}
+		text := safeExtractPage(page)
 
 		if c.StripNoise {
 			text = applyLLMOptimizations(text)
@@ -105,6 +95,21 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	res.OutputBytes = int64(len(outData))
 	res.Duration = time.Since(start)
 	return res
+}
+
+// safeExtractPage extracts text from a single PDF page, recovering from any panic
+// the ledongthuc/pdf library may raise on malformed content streams (e.g.
+// "malformed hex string", "unexpected EOF"). A panicking page yields "" so the
+// rest of the document and the batch continue unaffected.
+func safeExtractPage(page pdf.Page) (out string) {
+	defer func() { recover() }() //nolint:errcheck
+	out = extractWithTables(page)
+	if strings.TrimSpace(out) == "" {
+		if plainText, err := page.GetPlainText(nil); err == nil {
+			out = cleanExtractedText(plainText)
+		}
+	}
+	return out
 }
 
 // outputFilename returns the document base name and the full output filename for a PDF.

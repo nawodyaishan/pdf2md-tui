@@ -17,7 +17,7 @@ func TestFindPDFs(t *testing.T) {
 	// Create test files
 	files := []string{
 		"file1.pdf",
-		"file2.PDF",  // test case insensitivity
+		"file2.PDF", // test case insensitivity
 		"not_pdf.txt",
 		"sub/file3.pdf",
 		"sub/not_pdf.txt",
