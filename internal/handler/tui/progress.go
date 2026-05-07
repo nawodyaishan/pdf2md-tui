@@ -56,12 +56,18 @@ func (p *Progress) StartDiscovery() {
 func (p *Progress) StopDiscovery(count int) {
 	if p.spinner != nil {
 		if count == 0 {
-			p.spinner.Warning("No PDF files found.")
+			// handled by PrintNoPDFsFound in main loop if quiet isn't on
 		} else {
 			p.spinner.Success(fmt.Sprintf("Discovered %d PDF files.", count))
 		}
 		p.spinner = nil
 	}
+}
+
+// PrintNoPDFsFound prints a graceful message when no PDFs are discovered.
+func (p *Progress) PrintNoPDFsFound(dir string) {
+	pterm.Warning.Printf("No PDF files found in '%s'.\n", dir)
+	pterm.Info.Println("Use 'pdf2md-tui --help' for usage instructions.")
 }
 
 // StartConversion starts the progress bar for conversion.
