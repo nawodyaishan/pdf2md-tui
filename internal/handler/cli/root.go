@@ -19,6 +19,7 @@ var (
 	stripNoise     bool
 	forceOverwrite bool
 	extractImages  bool
+	logFile        string
 )
 
 var rootCmd = &cobra.Command{
@@ -52,6 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&stripNoise, "strip-noise", false, "Aggressively remove boilerplate for LLM optimization")
 	rootCmd.PersistentFlags().BoolVarP(&forceOverwrite, "force", "f", false, "Overwrite existing output files without prompting")
 	rootCmd.PersistentFlags().BoolVar(&extractImages, "extract-images", false, "Extract embedded images and inject markdown references")
+	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "pdf2md.log", "Path to save detailed conversion logs")
 
 	rootCmd.AddCommand(convertCmd)
 	rootCmd.AddCommand(versionCmd)

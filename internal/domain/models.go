@@ -16,13 +16,15 @@ const (
 
 // Result holds metrics and results of a conversion.
 type Result struct {
-	InputPath   string
-	OutputPath  string
-	InputBytes  int64
-	OutputBytes int64
-	Duration    time.Duration
-	Status      Status
-	Err         error
+	InputPath    string
+	OutputPath   string
+	InputBytes   int64
+	OutputBytes  int64
+	InputTokens  int
+	OutputTokens int
+	Duration     time.Duration
+	Status       Status
+	Err          error
 }
 
 // ExtractedImage tracks an image saved to disk.
@@ -91,6 +93,11 @@ type PageBlock struct {
 // TableData represents a structured grid of cells for a table block.
 type TableData struct {
 	Rows [][]string
+}
+
+// Tokenizer defines the interface for counting tokens in a string.
+type Tokenizer interface {
+	Count(text string) int
 }
 
 // PDFDocument represents an open PDF file ready for extraction.

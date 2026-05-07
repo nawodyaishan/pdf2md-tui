@@ -2,12 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 	"github.com/pterm/pterm"
 	"github.com/pterm/pterm/putils"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 const (
@@ -17,14 +20,22 @@ const (
 
 // Progress represents the TUI state for the conversion process.
 type Progress struct {
-	spinner    *pterm.SpinnerPrinter
-	bar        *pterm.ProgressbarPrinter
-	totalCount int
+	spinner      *pterm.SpinnerPrinter
+	area         *pterm.AreaPrinter
+	totalCount   int
+	currentCount int
+	workerCount  int
+	lastSysInfo  domain.SysInfo
 }
 
 // New creates a new Progress instance.
 func New() *Progress {
 	return &Progress{}
+}
+
+func (p *Progress) SetBatchInfo(total, workers int) {
+	p.totalCount = total
+	p.workerCount = workers
 }
 
 // PrintBanner renders the branded startup banner.
@@ -36,10 +47,10 @@ func (p *Progress) PrintBanner() {
 	pterm.Print(banner)
 
 	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
-		pterm.LightCyan("⚡ LLM-Optimized PDF → Markdown Converter"),
+		pterm.NewStyle(pterm.FgLightCyan, pterm.Italic).Sprint("⚡ LLM-Optimized PDF → Markdown Converter"),
 	)
 	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
-		pterm.Gray(fmt.Sprintf("v%s • by @%s", version.Version, author)),
+		pterm.NewStyle(pterm.FgGray).Sprintf("v%s • by @%s", version.Version, author),
 	)
 	pterm.Println() // breathing room
 }
@@ -71,34 +82,86 @@ func (p *Progress) PrintNoPDFsFound(dir string) {
 }
 
 // StartConversion starts the progress bar for conversion.
-func (p *Progress) StartConversion(total int) {
+func (p *Progress) StartConversion(total, workers int) {
 	p.totalCount = total
-	bar, _ := pterm.DefaultProgressbar.
-		WithTotal(total).
-		WithTitle("Converting PDFs").
-		WithBarCharacter("█").
-		WithLastCharacter("█").
-		WithElapsedTimeRoundingFactor(time.Millisecond).
-		Start()
-	p.bar = bar
+	p.workerCount = workers
+	p.currentCount = 0
+
+	// Initialize area for live updates
+	area, _ := pterm.DefaultArea.Start()
+	p.area = area
+	p.renderLiveDashboard()
 }
 
-// Increment increments the progress bar.
+// Increment increments the progress bar and refreshes the live area.
 func (p *Progress) Increment() {
-	if p.bar != nil {
-		p.bar.Increment()
+	p.currentCount++
+	p.renderLiveDashboard()
+}
+
+// UpdateLiveStats updates the system info and refreshes the live area.
+func (p *Progress) UpdateLiveStats(sys domain.SysInfo) {
+	p.lastSysInfo = sys
+	p.renderLiveDashboard()
+}
+
+// StopConversion stops the live area updates.
+func (p *Progress) StopConversion() {
+	if p.area != nil {
+		_ = p.area.Stop()
+		p.area = nil
 	}
 }
 
-// StopConversion stops the progress bar.
-func (p *Progress) StopConversion() {
-	if p.bar != nil {
-		_, _ = p.bar.Stop()
+func (p *Progress) renderLiveDashboard() {
+	if p.area == nil {
+		return
 	}
+
+	// 1. Conversion Progress
+	barWidth := 40
+	progressPct := float64(p.currentCount) / float64(p.totalCount)
+	filled := int(progressPct * float64(barWidth))
+	barStr := fmt.Sprintf("%s [%s%s] %d/%d (%d%%)",
+		pterm.Bold.Sprint("Converting PDFs:"),
+		pterm.LightCyan(strings.Repeat("█", filled)),
+		pterm.NewStyle(pterm.FgGray).Sprint(strings.Repeat("░", barWidth-filled)),
+		p.currentCount, p.totalCount, int(progressPct*100),
+	)
+
+	// 2. Resource Info (Compact)
+	cpuWidth := 15
+	cpuFilled := int((p.lastSysInfo.CPUUsage / 100.0) * float64(cpuWidth))
+	if cpuFilled > cpuWidth { cpuFilled = cpuWidth }
+	cpuBar := fmt.Sprintf("[%s%s]",
+		pterm.LightMagenta(strings.Repeat("■", cpuFilled)),
+		pterm.NewStyle(pterm.FgGray).Sprint(strings.Repeat(" ", cpuWidth-cpuFilled)),
+	)
+
+	resStr := fmt.Sprintf(
+		" %s %s %.1f%%  %s %s %.1f%%",
+		pterm.LightCyan("CPU:"), cpuBar, p.lastSysInfo.CPUUsage,
+		pterm.LightMagenta("MEM:"), pterm.Gray(FormatBytes(int64(p.lastSysInfo.MemoryUsed))), p.lastSysInfo.MemoryPct,
+	)
+
+	// 3. Hardware Map (Single Line)
+	coreMap := ""
+	totalCores := runtime.NumCPU()
+	for i := 0; i < totalCores; i++ {
+		if i < p.workerCount {
+			coreMap += pterm.NewStyle(pterm.FgCyan).Sprint("▣")
+		} else {
+			coreMap += pterm.NewStyle(pterm.FgDarkGray).Sprint("□")
+		}
+	}
+	hwStr := fmt.Sprintf(" %s %s", pterm.LightBlue("CORES:"), coreMap)
+
+	// Combine
+	p.area.Update(fmt.Sprintf("%s\n%s\n%s", barStr, resStr, hwStr))
 }
 
 // PrintSummary prints a branded summary of the conversion results.
-func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Duration, errCount, ignoredCount int) {
+func (p *Progress) PrintSummary(results []domain.Result, inputBytes, outputBytes int64, duration time.Duration, errCount, ignoredCount int, sys domain.SysInfo) {
 	pterm.Println() // space before summary
 
 	// Section header with icon
@@ -116,15 +179,15 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 	outputTokens := outputBytes / 4
 
 	// Status row color
-	errStyle := pterm.FgGreen
+	errStyle := pterm.NewStyle(pterm.FgLightGreen)
 	errLabel := "✓ None"
 
 	if errCount > 0 || ignoredCount > 0 {
-		errStyle = pterm.FgYellow
+		errStyle = pterm.NewStyle(pterm.FgLightYellow)
 		var labels []string
 		if errCount > 0 {
 			labels = append(labels, fmt.Sprintf("%d failed", errCount))
-			errStyle = pterm.FgRed
+			errStyle = pterm.NewStyle(pterm.FgLightRed, pterm.Bold)
 		}
 		if ignoredCount > 0 {
 			labels = append(labels, fmt.Sprintf("%d skipped (OCR req)", ignoredCount))
@@ -132,22 +195,91 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 		errLabel = "✗ " + strings.Join(labels, ", ")
 	}
 
-	data := [][]string{
-		{"Metric", "Value"},
-		{"Files Processed", fmt.Sprintf("%d", p.totalCount)},
-		{"Errors / Ignored", pterm.NewStyle(errStyle).Sprint(errLabel)},
-		{"Duration", duration.Round(time.Millisecond).String()},
-		{"", ""},
-		{"PDF Source Size", formatBytes(inputBytes) + pterm.Gray(fmt.Sprintf("  (~%d tokens)", inputTokens))},
-		{"Markdown Output", formatBytes(outputBytes) + pterm.Gray(fmt.Sprintf("  (~%d tokens)", outputTokens))},
-		{"Token Savings", pterm.NewStyle(pterm.FgLightGreen, pterm.Bold).Sprintf("▼ %.1f%% reduction", savings)},
+	// Processing Info Panel (Left)
+	processingInfo := fmt.Sprintf(
+		"%s %d\n%s %s\n%s %s",
+		pterm.Cyan("Files Processed:"), len(results),
+		pterm.Cyan("Errors / Ignored:"), errStyle.Sprint(errLabel),
+		pterm.Cyan("Total Duration:"), duration.Round(time.Millisecond).String(),
+	)
+
+	// Efficiency Stats Panel (Middle)
+	efficiencyStats := fmt.Sprintf(
+		"%s %s %s\n%s %s %s\n%s %s",
+		pterm.LightMagenta("PDF Source:"), FormatBytes(inputBytes), pterm.Gray(fmt.Sprintf("(~%d tkn)", inputTokens)),
+		pterm.LightMagenta("MD Output: "), FormatBytes(outputBytes), pterm.Gray(fmt.Sprintf("(~%d tkn)", outputTokens)),
+		pterm.LightMagenta("Efficiency:"), pterm.NewStyle(pterm.FgLightGreen, pterm.Bold).Sprintf("▼ %.1f%%", savings),
+	)
+
+	// Core Utilization Panel (Right)
+	totalCores := runtime.NumCPU()
+	coreMap := ""
+	for i := 0; i < totalCores; i++ {
+		if i > 0 && i%4 == 0 {
+			coreMap += "\n"
+		}
+		if i < p.workerCount {
+			coreMap += pterm.NewStyle(pterm.FgCyan).Sprint("▣ ")
+		} else {
+			coreMap += pterm.NewStyle(pterm.FgDarkGray).Sprint("□ ")
+		}
 	}
 
-	_ = pterm.DefaultTable.
-		WithHasHeader().
-		WithHeaderStyle(pterm.NewStyle(pterm.FgCyan, pterm.Bold)).
-		WithData(data).
-		Render()
+	coreInfo := fmt.Sprintf(
+		"%s %d/%d\n%s\n%s",
+		pterm.LightBlue("Cores Utilized:"), p.workerCount, totalCores,
+		coreMap,
+		pterm.Gray(fmt.Sprintf("Parallelism: %.1fx", float64(p.workerCount))),
+	)
+
+	// Resource Usage Panel
+	cpuColor := pterm.FgLightGreen
+	if sys.CPUUsage > 80 {
+		cpuColor = pterm.FgLightRed
+	} else if sys.CPUUsage > 50 {
+		cpuColor = pterm.FgLightYellow
+	}
+
+	memColor := pterm.FgLightGreen
+	if sys.MemoryPct > 80 {
+		memColor = pterm.FgLightRed
+	}
+
+	resourceInfo := fmt.Sprintf(
+		"%s %s\n%s %s\n%s %s",
+		pterm.LightBlue("Resource Peaks:"), "",
+		pterm.Cyan("Avg CPU Load:"), pterm.NewStyle(cpuColor).Sprintf("%.1f%%", sys.CPUUsage),
+		pterm.Cyan("Peak Memory: "), pterm.NewStyle(memColor).Sprintf("%s (%.1f%%)", FormatBytes(int64(sys.MemoryUsed)), sys.MemoryPct),
+	)
+
+	// Create panels
+	panels := pterm.Panels{
+		{
+			{Data: processingInfo},
+			{Data: efficiencyStats},
+			{Data: coreInfo},
+			{Data: resourceInfo},
+		},
+	}
+
+	// Render panels
+	_ = pterm.DefaultPanel.WithPanels(panels).WithPadding(2).Render()
+
+	// If there are failures, list them clearly
+	if errCount > 0 {
+		pterm.Println()
+		pterm.DefaultSection.
+			WithLevel(2).
+			WithStyle(pterm.NewStyle(pterm.FgLightRed, pterm.Bold)).
+			Println("❌ Failure Details")
+
+		for _, res := range results {
+			if res.Err != nil {
+				pterm.Printf("%s  %s\n", pterm.NewStyle(pterm.FgLightRed).Sprint("•"), pterm.NewStyle(pterm.FgDefault, pterm.Bold).Sprint(res.InputPath))
+				pterm.Printf("   %s %s\n", pterm.NewStyle(pterm.FgGray).Sprint("Reason:"), pterm.NewStyle(pterm.FgLightRed, pterm.Italic).Sprint(res.Err.Error()))
+			}
+		}
+	}
 
 	// Footer
 	pterm.Println()
@@ -157,7 +289,32 @@ func (p *Progress) PrintSummary(inputBytes, outputBytes int64, duration time.Dur
 	pterm.Println()
 }
 
-func formatBytes(b int64) string {
+// ShowPostConversionMenu displays interactive options after conversion.
+func (p *Progress) ShowPostConversionMenu(hasErrors bool) (string, error) {
+	options := []string{"📁 Open Output Directory", "🚪 Exit"}
+	if hasErrors {
+		options = []string{"📁 Open Output Directory", "📄 View Detailed Log", "🚪 Exit"}
+	}
+
+	selected, err := pterm.DefaultInteractiveSelect.
+		WithMaxHeight(5).
+		WithOptions(options).
+		Show("What would you like to do next?")
+	if err != nil {
+		return "", err
+	}
+
+	switch selected {
+	case "📁 Open Output Directory":
+		return "open_dir", nil
+	case "📄 View Detailed Log":
+		return "view_log", nil
+	default:
+		return "exit", nil
+	}
+}
+
+func FormatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
@@ -168,4 +325,20 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// RunDashboard starts the Bubble Tea program and returns the program instance and a channel to send updates.
+func (p *Progress) RunDashboard(total, workers int) (*tea.Program, chan tea.Msg) {
+	model := NewModel(total, workers)
+	prog := tea.NewProgram(model, tea.WithAltScreen())
+	msgChan := make(chan tea.Msg)
+
+	// Background loop to feed the program
+	go func() {
+		for msg := range msgChan {
+			prog.Send(msg)
+		}
+	}()
+
+	return prog, msgChan
 }
