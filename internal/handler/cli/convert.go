@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -15,7 +18,10 @@ import (
 	"github.com/nawodyaishan/pdf2md-tui/internal/repository/discovery"
 	"github.com/nawodyaishan/pdf2md-tui/internal/repository/pdf"
 	"github.com/nawodyaishan/pdf2md-tui/internal/repository/storage"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/sysinfo"
 	"github.com/nawodyaishan/pdf2md-tui/internal/service"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
@@ -37,6 +43,20 @@ var convertCmd = &cobra.Command{
 		ui := tui.New()
 		if !quiet {
 			ui.PrintBanner()
+		}
+
+		// Initialize logger
+		logF, logErr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if logErr == nil {
+			defer func() { _ = logF.Close() }()
+			pterm.DefaultLogger.Writer = logF
+			if verbose {
+				pterm.DefaultLogger.Writer = io.MultiWriter(logF, os.Stderr)
+			}
+			pterm.DefaultLogger.Info("Conversion session started", pterm.DefaultLogger.Args("time", time.Now().Format(time.RFC3339)))
+		}
+
+		if !quiet {
 			ui.StartDiscovery()
 		}
 
@@ -68,7 +88,8 @@ var convertCmd = &cobra.Command{
 
 		store := storage.NewStorage()
 		parser := pdf.NewParser()
-		conv := service.NewConverterService(cfg, store, parser)
+		tokenCount, _ := pdf.NewTokenizer()
+		conv := service.NewConverterService(cfg, store, parser, tokenCount)
 
 		// Pre-flight: detect output files that already exist.
 		if !forceOverwrite && !quiet {
@@ -109,9 +130,7 @@ var convertCmd = &cobra.Command{
 
 			if errors.Is(err, domain.ErrRequiresOCR) {
 				ignoredCount++
-				if verbose && !quiet {
-					fmt.Fprintf(os.Stderr, "\nSkipping %s: Requires OCR", f)
-				}
+				pterm.DefaultLogger.Warn("Skipping file: Requires OCR", pterm.DefaultLogger.Args("file", f))
 				allResults = append(allResults, domain.Result{
 					InputPath: f,
 					Status:    domain.StatusIgnored,
@@ -123,7 +142,7 @@ var convertCmd = &cobra.Command{
 
 		if len(convertible) == 0 {
 			if !quiet {
-				ui.PrintSummary(0, 0, 0, 0, ignoredCount)
+				ui.PrintSummary(allResults, 0, 0, 0, 0, ignoredCount, domain.SysInfo{})
 			} else {
 				printJSONSummary(allResults, 0, 0, 0, ignoredCount)
 			}
@@ -135,9 +154,57 @@ var convertCmd = &cobra.Command{
 			numWorkers = runtime.NumCPU()
 		}
 
+		var prog *tea.Program
+		var finalModel tea.Model
+		var msgChan chan tea.Msg
+		var tuiModel tui.Model
+
 		if !quiet {
-			ui.StartConversion(len(convertible))
+			ui.SetBatchInfo(len(convertible), numWorkers)
+			tuiModel = tui.NewModel(len(convertible), numWorkers)
+			prog = tea.NewProgram(tuiModel, tea.WithAltScreen())
+			msgChan = make(chan tea.Msg)
+			
+			// Bridge msgChan to prog
+			go func() {
+				for msg := range msgChan {
+					prog.Send(msg)
+				}
+			}()
+
+			// Redirect logger to nowhere during TUI to prevent screen corruption
+			pterm.DefaultLogger.Writer = io.Discard
 		}
+
+		// Resource tracking
+		sysProv := sysinfo.NewProvider()
+		var maxSys domain.SysInfo
+		sysCtx, sysCancel := context.WithCancel(context.Background())
+		defer sysCancel()
+
+		go func() {
+			ticker := time.NewTicker(500 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-sysCtx.Done():
+					return
+				case <-ticker.C:
+					snap, _ := sysProv.GetSnapshot()
+					if !quiet && msgChan != nil {
+						msgChan <- tui.SysInfoMsg{Info: snap}
+					}
+					if snap.CPUUsage > maxSys.CPUUsage {
+						maxSys.CPUUsage = snap.CPUUsage
+					}
+					if snap.MemoryUsed > maxSys.MemoryUsed {
+						maxSys.MemoryUsed = snap.MemoryUsed
+						maxSys.MemoryPct = snap.MemoryPct
+						maxSys.MemoryTotal = snap.MemoryTotal
+					}
+				}
+			}
+		}()
 
 		jobs := make(chan string, len(convertible))
 		workerResults := make(chan domain.Result, len(convertible))
@@ -150,8 +217,8 @@ var convertCmd = &cobra.Command{
 				for pdf := range jobs {
 					res := conv.Convert(pdf, outDirPath)
 					workerResults <- res
-					if !quiet {
-						ui.Increment()
+					if !quiet && msgChan != nil {
+						msgChan <- tui.StatusUpdateMsg{Result: &res}
 					}
 				}
 			}()
@@ -165,35 +232,60 @@ var convertCmd = &cobra.Command{
 		go func() {
 			wg.Wait()
 			close(workerResults)
+			sysCancel() // Stop tracking resources immediately
+			if msgChan != nil {
+				msgChan <- tui.BatchCompleteMsg{} // Trigger UI pause
+			}
 		}()
 
 		var totalIn, totalOut int64
 		var totalDur time.Duration
 		var errCount int
 
-		for res := range workerResults {
-			allResults = append(allResults, res)
-			if res.Err != nil {
-				errCount++
-				if verbose && !quiet {
-					fmt.Fprintf(os.Stderr, "\nError processing %s: %v", res.InputPath, res.Err)
+		if !quiet {
+			// Now run the TUI in main thread
+			var err error
+			finalModel, err = prog.Run()
+			if err != nil {
+				pterm.Error.Printf("UI error: %v\n", err)
+			}
+			
+			// Restore logger
+			pterm.DefaultLogger.Writer = logF
+			if verbose {
+				pterm.DefaultLogger.Writer = io.MultiWriter(logF, os.Stderr)
+			}
+			
+			// Handle the integrated menu selection
+			if m, ok := finalModel.(tui.Model); ok {
+				allResults = m.Results
+				if m.SelectedMenuIndex == 0 {
+					// Open Folder selected
+					_ = openDir(outDirPath)
 				}
-			} else {
-				totalIn += res.InputBytes
-				totalOut += res.OutputBytes
-				totalDur += res.Duration
+			}
+		} else {
+			// Non-interactive mode just waits for results
+			for res := range workerResults {
+				allResults = append(allResults, res)
+				if res.Err != nil {
+					errCount++
+				} else {
+					totalIn += res.InputBytes
+					totalOut += res.OutputBytes
+					totalDur += res.Duration
+				}
 			}
 		}
 
 		if !quiet {
-			ui.StopConversion()
-			ui.PrintSummary(totalIn, totalOut, totalDur, errCount, ignoredCount)
+			sysCancel() // Stop tracking
 		} else {
 			printJSONSummary(allResults, totalIn, totalOut, totalDur, ignoredCount)
 		}
 
 		if errCount > 0 {
-			return errors.New("conversion completed with errors")
+			return fmt.Errorf("conversion completed with %d errors; see %s for details", errCount, logFile)
 		}
 		return nil
 	},
@@ -235,4 +327,23 @@ func printJSONSummary(results []domain.Result, totalIn, totalOut int64, duration
 
 	data, _ := json.MarshalIndent(summary, "", "  ")
 	fmt.Println(string(data))
+}
+
+func openDir(path string) error {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "explorer"
+		args = []string{path}
+	case "darwin":
+		cmd = "open"
+		args = []string{path}
+	default: // linux, freebsd, etc.
+		cmd = "xdg-open"
+		args = []string{path}
+	}
+
+	return exec.Command(cmd, args...).Run()
 }
