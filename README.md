@@ -105,6 +105,49 @@ pdf2md-tui convert ./docs --extract-images
 pdf2md-tui version
 ```
 
+### Go Library Usage
+
+Since the refactoring to Clean Architecture, you can embed the conversion engine directly into your own Go applications.
+
+> [!NOTE]
+> The core logic currently resides in `internal/` packages. To use this in an external module, you should move `internal/domain`, `internal/service`, and `internal/repository` to a public directory like `pkg/` or the root.
+
+```go
+import (
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/repository/storage"
+	"github.com/nawodyaishan/pdf2md-tui/internal/service"
+)
+
+func main() {
+	// 1. Initialize configuration
+	cfg := domain.NewConfig()
+	cfg.ExtractImages = true
+	cfg.StripNoise = true
+
+	// 2. Initialize dependencies (Clean Architecture)
+	store := storage.NewStorage()
+	parser := pdf.NewParser()
+
+	// 3. Initialize the service
+	conv := service.NewConverterService(cfg, store, parser)
+
+	// 4. Run conversion
+	// Convert(pdfPath, outDir) returns a domain.Result
+	res := conv.Convert("input.pdf", "output_dir")
+
+	if res.Err != nil {
+		fmt.Printf("Conversion failed: %v\n", res.Err)
+		return
+	}
+
+	fmt.Printf("Successfully converted %s to %s (Saved %d bytes)\n", 
+		res.InputPath, res.OutputPath, res.InputBytes - res.OutputBytes)
+}
+```
+
+
 ### Flags
 
 | Flag | Short | Default | Description |
