@@ -36,6 +36,31 @@ func TestApplyLLMOptimizations(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdown_TableFencing(t *testing.T) {
+	blocks := []domain.PageBlock{
+		{Type: domain.BlockTypeText, Text: "Before table"},
+		{
+			Type: domain.BlockTypeTable,
+			Table: domain.TableData{
+				Rows: [][]string{
+					{"Col1", "Col2", "Col3"},
+					{"A", "B", "C"},
+				},
+			},
+		},
+		{Type: domain.BlockTypeText, Text: "After table"},
+	}
+
+	result := renderMarkdown(blocks)
+
+	if !strings.Contains(result, "Before table\n\n\n| Col1") {
+		t.Errorf("table not fenced properly before: %q", result)
+	}
+	if !strings.Contains(result, "|\n\nAfter table") {
+		t.Errorf("table not fenced properly after: %q", result)
+	}
+}
+
 // Mocks
 
 type mockStorage struct {
@@ -71,8 +96,10 @@ func (m *mockParser) OpenDocument(pdfPath string) (domain.PDFDocument, error) {
 
 type mockDoc struct{}
 
-func (m *mockDoc) NumPages() int                               { return 1 }
-func (m *mockDoc) ExtractPageText(pageNum int) (string, error) { return "Test text", nil }
+func (m *mockDoc) NumPages() int { return 1 }
+func (m *mockDoc) ExtractPageBlocks(pageNum int) ([]domain.PageBlock, error) {
+	return []domain.PageBlock{{Type: domain.BlockTypeText, Text: "Test text"}}, nil
+}
 func (m *mockDoc) AnalyzePreFlight(samplePages int) (domain.PageAnalysis, error) {
 	return domain.PageAnalysis{}, nil
 }
