@@ -149,6 +149,21 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed breakdown of the
 
 ---
 
+## Roadmap Status
+
+- [x] **🛡️ Graceful OCR Detection** — Detect and skip scanned PDFs without failing.
+- [x] **🖼️ Image Extraction Pipeline** — Extract raw images for "Look Twice" VLM workflows.
+- [x] **⚡ Zero-Arg Usability** — Run `pdf2md-tui` in any folder with no arguments.
+- [x] **🏗️ Clean Architecture** — Decoupled domain/service/repository structure for scaling.
+- [ ] **🧱 Chunking-Safe Tables** — Atomic GFM pipe tables for hybrid vector chunkers.
+- [ ] **🔇 CI-Friendly Quiet Mode** — Non-interactive JSON output for automation.
+- [ ] **🔌 MCP Server Wrapper** — Native tool support for Model Context Protocol agents.
+- [ ] **☁️ VLM Cloud Integration** — High-accuracy Markdown generation via GPT-4o/Claude.
+
+See [ROADMAP.md](ROADMAP.md) for the full strategic vision.
+
+---
+
 ## Building from source
 
 ```bash
