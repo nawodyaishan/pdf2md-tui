@@ -14,8 +14,9 @@ import (
 
 // Converter handles the PDF to MD conversion settings.
 type Converter struct {
-	DateFormat string
-	StripNoise bool
+	DateFormat    string
+	StripNoise    bool
+	ExtractImages bool
 }
 
 // Result holds metrics and results of a conversion.
@@ -25,17 +26,19 @@ type Result struct {
 	InputBytes  int64
 	OutputBytes int64
 	Duration    time.Duration
+	Status      Status
 	Err         error
 }
 
 // New creates a new Converter.
-func New(dateFormat string, stripNoise bool) *Converter {
+func New(dateFormat string, stripNoise, extractImages bool) *Converter {
 	if dateFormat == "" {
 		dateFormat = "2006-01-02"
 	}
 	return &Converter{
-		DateFormat: dateFormat,
-		StripNoise: stripNoise,
+		DateFormat:    dateFormat,
+		StripNoise:    stripNoise,
+		ExtractImages: extractImages,
 	}
 }
 
@@ -48,6 +51,7 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 
 	info, err := os.Stat(pdfPath)
 	if err != nil {
+		res.Status = StatusError
 		res.Err = fmt.Errorf("stat: %w", err)
 		return res
 	}
@@ -59,6 +63,7 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 	// Open PDF using ledongthuc/pdf which handles font decoding and glyph mapping
 	f, reader, err := pdf.Open(pdfPath)
 	if err != nil {
+		res.Status = StatusError
 		res.Err = fmt.Errorf("open pdf: %w", err)
 		return res
 	}
@@ -66,6 +71,21 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("# %s\n\n", baseName))
+
+	var imagesByPage map[int][]ExtractedImage
+	if c.ExtractImages {
+		if imgs, err := ExtractImages(pdfPath, outDir); err == nil {
+			imagesByPage = make(map[int][]ExtractedImage)
+			for _, img := range imgs {
+				imagesByPage[img.PageNumber] = append(imagesByPage[img.PageNumber], img)
+			}
+		} else {
+			// If image extraction fails, we can just continue with text extraction
+			if os.Getenv("DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "failed to extract images: %v\n", err)
+			}
+		}
+	}
 
 	totalPages := reader.NumPage()
 	for i := 1; i <= totalPages; i++ {
@@ -75,6 +95,12 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 		}
 
 		text := safeExtractPage(page)
+
+		if c.ExtractImages && len(imagesByPage[i]) > 0 {
+			for _, img := range imagesByPage[i] {
+				buf.WriteString(fmt.Sprintf("![image](%s)\n\n", img.Path))
+			}
+		}
 
 		if c.StripNoise {
 			text = applyLLMOptimizations(text)
@@ -88,6 +114,7 @@ func (c *Converter) Convert(pdfPath, outDir string) Result {
 
 	outData := buf.Bytes()
 	if err := os.WriteFile(res.OutputPath, outData, 0644); err != nil {
+		res.Status = StatusError
 		res.Err = fmt.Errorf("write md: %w", err)
 		return res
 	}
