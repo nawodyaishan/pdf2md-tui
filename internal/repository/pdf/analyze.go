@@ -1,32 +1,20 @@
-package converter
+package pdf
 
 import (
 	"strings"
 
-	"github.com/ledongthuc/pdf"
+	ledongpdf "github.com/ledongthuc/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 )
-
-// PageAnalysis holds the results of the pre-flight check.
-type PageAnalysis struct {
-	TextCharCount int
-	XObjectCount  int
-	PagesSampled  int
-}
 
 // ocrTextThreshold is the minimum number of trimmed text characters
 // required across the sampled pages to not be considered a scanned PDF.
 const ocrTextThreshold = 50
 
-// AnalyzePDF performs a lightweight pre-flight check on the first samplePages of a PDF.
+// AnalyzePreFlight performs a lightweight pre-flight check on the first samplePages of a PDF.
 // It returns ErrRequiresOCR if the document appears to be scanned or image-only.
-func AnalyzePDF(pdfPath string, samplePages int) (PageAnalysis, error) {
-	var analysis PageAnalysis
-
-	f, reader, err := pdf.Open(pdfPath)
-	if err != nil {
-		return analysis, err
-	}
-	defer f.Close() //nolint:errcheck
+func AnalyzePreFlight(reader *ledongpdf.Reader, samplePages int) (domain.PageAnalysis, error) {
+	var analysis domain.PageAnalysis
 
 	totalPages := reader.NumPage()
 	if totalPages == 0 {
@@ -37,7 +25,6 @@ func AnalyzePDF(pdfPath string, samplePages int) (PageAnalysis, error) {
 	if totalPages < limit {
 		limit = totalPages
 	}
-	analysis.PagesSampled = limit
 
 	for i := 1; i <= limit; i++ {
 		page := reader.Page(i)
@@ -47,18 +34,18 @@ func AnalyzePDF(pdfPath string, samplePages int) (PageAnalysis, error) {
 
 		// 1. Get Text
 		if text, err := page.GetPlainText(nil); err == nil {
-			analysis.TextCharCount += len(strings.TrimSpace(text))
+			analysis.CharCount += len(strings.TrimSpace(text))
 		}
 
 		// 2. Count XObjects (Heuristic for images/forms)
 		xobj := page.V.Key("Resources").Key("XObject")
-		if xobj.Kind() == pdf.Dict {
-			analysis.XObjectCount += xobj.Len()
+		if xobj.Kind() == ledongpdf.Dict {
+			analysis.XObjectCnt += xobj.Len()
 		}
 	}
 
-	if analysis.TextCharCount < ocrTextThreshold && analysis.XObjectCount > 0 {
-		return analysis, ErrRequiresOCR
+	if analysis.CharCount < ocrTextThreshold && analysis.XObjectCnt > 0 {
+		return analysis, domain.ErrRequiresOCR
 	}
 
 	return analysis, nil
