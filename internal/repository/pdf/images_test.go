@@ -1,4 +1,4 @@
-package converter
+package pdf
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 
 func TestExtractImages_NonExistentFile(t *testing.T) {
 	outDir := t.TempDir()
-	
+
 	_, err := ExtractImages("does_not_exist.pdf", outDir)
 	if err == nil {
 		t.Fatal("expected error for non-existent file, got nil")
@@ -23,7 +23,7 @@ func TestExtractImages_WithImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	// Assuming tests run in internal/converter
 	pdfPath := filepath.Join(cwd, "..", "..", "testdata", "Newsletter.pdf")
 	if _, err := os.Stat(pdfPath); os.IsNotExist(err) {
@@ -31,16 +31,16 @@ func TestExtractImages_WithImages(t *testing.T) {
 	}
 
 	outDir := t.TempDir()
-	
+
 	images, err := ExtractImages(pdfPath, outDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	if len(images) == 0 {
 		t.Error("expected to extract images, got 0")
 	}
-	
+
 	// Ensure paths are well-formed
 	for _, img := range images {
 		if img.PageNumber <= 0 {

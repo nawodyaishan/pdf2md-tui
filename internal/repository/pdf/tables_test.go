@@ -1,10 +1,10 @@
-package converter
+package pdf
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/ledongthuc/pdf"
+	ledongpdf "github.com/ledongthuc/pdf"
 )
 
 // --- coalesceChars tests ---
@@ -17,7 +17,7 @@ func TestCoalesceChars_Empty(t *testing.T) {
 }
 
 func TestCoalesceChars_SingleCharacter(t *testing.T) {
-	texts := []pdf.Text{
+	texts := []ledongpdf.Text{
 		{S: "A", X: 10, Y: 100, FontSize: 12},
 	}
 	result := coalesceChars(texts)
@@ -31,7 +31,7 @@ func TestCoalesceChars_SingleCharacter(t *testing.T) {
 
 func TestCoalesceChars_JoinsAdjacentChars(t *testing.T) {
 	// Simulate "Hello" as 5 characters at 12pt font, ~7pt apart
-	texts := []pdf.Text{
+	texts := []ledongpdf.Text{
 		{S: "H", X: 10, Y: 100, FontSize: 12},
 		{S: "e", X: 17, Y: 100, FontSize: 12},
 		{S: "l", X: 24, Y: 100, FontSize: 12},
@@ -49,7 +49,7 @@ func TestCoalesceChars_JoinsAdjacentChars(t *testing.T) {
 
 func TestCoalesceChars_SplitsDistantChars(t *testing.T) {
 	// Two words "Hi" and "Go" separated by a large gap
-	texts := []pdf.Text{
+	texts := []ledongpdf.Text{
 		{S: "H", X: 10, Y: 100, FontSize: 12},
 		{S: "i", X: 17, Y: 100, FontSize: 12},
 		{S: "G", X: 200, Y: 100, FontSize: 12},
@@ -66,7 +66,7 @@ func TestCoalesceChars_SplitsDistantChars(t *testing.T) {
 
 func TestCoalesceChars_SplitsOnDifferentLines(t *testing.T) {
 	// "Top" on Y=100, "Bot" on Y=80
-	texts := []pdf.Text{
+	texts := []ledongpdf.Text{
 		{S: "T", X: 10, Y: 100, FontSize: 12},
 		{S: "o", X: 17, Y: 100, FontSize: 12},
 		{S: "p", X: 24, Y: 100, FontSize: 12},
@@ -84,7 +84,7 @@ func TestCoalesceChars_SplitsOnDifferentLines(t *testing.T) {
 }
 
 func TestCoalesceChars_SkipsEmptyStrings(t *testing.T) {
-	texts := []pdf.Text{
+	texts := []ledongpdf.Text{
 		{S: "", X: 10, Y: 100, FontSize: 12},
 		{S: "A", X: 20, Y: 100, FontSize: 12},
 		{S: "", X: 30, Y: 100, FontSize: 12},
