@@ -15,6 +15,7 @@ var (
 	workers        int
 	dateFormat     string
 	verbose        bool
+	quiet          bool
 	stripNoise     bool
 	forceOverwrite bool
 	extractImages  bool
@@ -33,6 +34,10 @@ Run without arguments in a terminal to launch the interactive menu.`,
 		if len(args) == 0 && !anyFlagChanged(cmd) && tui.IsInteractive() {
 			return runInteractiveMenu(cmd)
 		}
+		// Non-interactive zero-arg or if flags set: default to CWD conversion
+		if len(args) == 0 {
+			args = []string{"."}
+		}
 		return convertCmd.RunE(cmd, args)
 	},
 }
@@ -43,6 +48,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&workers, "workers", "w", 0, "Concurrent conversion workers (default: NumCPU)")
 	rootCmd.PersistentFlags().StringVar(&dateFormat, "date-format", "2006-01-02", "Date suffix format (e.g., 2006-01-02)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress TUI output; emit JSON summary to stdout")
 	rootCmd.PersistentFlags().BoolVar(&stripNoise, "strip-noise", false, "Aggressively remove boilerplate for LLM optimization")
 	rootCmd.PersistentFlags().BoolVarP(&forceOverwrite, "force", "f", false, "Overwrite existing output files without prompting")
 	rootCmd.PersistentFlags().BoolVar(&extractImages, "extract-images", false, "Extract embedded images and inject markdown references")
