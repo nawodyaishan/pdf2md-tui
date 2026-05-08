@@ -160,6 +160,7 @@ var convertCmd = &cobra.Command{
 
 		if useDashboard {
 			ui.SetBatchInfo(len(convertible), numWorkers)
+			clearTerminal(os.Stdout)
 			tuiModel = tui.NewModel(len(convertible), numWorkers)
 			prog = tea.NewProgram(tuiModel, tea.WithAltScreen())
 			msgChan = make(chan tea.Msg)
@@ -418,4 +419,8 @@ func openDir(path string) error {
 	}
 
 	return exec.Command(cmd, args...).Run()
+}
+
+func clearTerminal(w io.Writer) {
+	_, _ = fmt.Fprint(w, "\033[2J\033[H")
 }
