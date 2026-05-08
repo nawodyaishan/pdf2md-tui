@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 )
 
 func (m Model) renderDashboard() string {
@@ -154,12 +155,15 @@ func (m Model) renderSummaryPanel() string {
 	var results = m.Results
 	var totalIn, totalOut int64
 	var totalInTkn, totalOutTkn int
-	var errCount int
+	var errCount, ignoredCount int
 
 	for _, r := range results {
-		if r.Err != nil {
+		switch {
+		case r.Err != nil || r.Status == domain.StatusError:
 			errCount++
-		} else {
+		case r.Status == domain.StatusIgnored:
+			ignoredCount++
+		default:
 			totalIn += r.InputBytes
 			totalOut += r.OutputBytes
 			totalInTkn += r.InputTokens
@@ -187,7 +191,7 @@ func (m Model) renderSummaryPanel() string {
 	leftCol := fmt.Sprintf(
 		"Files Processed: %d\nErrors / Ignored: %s\nTotal Duration:  %.2fs",
 		len(results),
-		formatErrorCount(errCount),
+		formatErrorCount(errCount, ignoredCount),
 		duration.Seconds(),
 	)
 
@@ -214,24 +218,30 @@ func (m Model) renderSummaryPanel() string {
 	return lipgloss.JoinVertical(lipgloss.Center, title, "\n", stats)
 }
 
-func formatErrorCount(errs int) string {
-	if errs == 0 {
+func formatErrorCount(errs, ignored int) string {
+	if errs == 0 && ignored == 0 {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Render("✓ None")
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("✘ %d", errs))
+	if errs > 0 && ignored > 0 {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("✘ %d errors, %d skipped", errs, ignored))
+	}
+	if errs > 0 {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("✘ %d errors", errs))
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD166")).Render(fmt.Sprintf("⚠ %d skipped", ignored))
 }
 
 func (m Model) renderCompletionMenu() string {
-	options := []string{"📁 Open Output Directory", "🚪 Exit"}
+	options := m.completionMenuItems()
 	var s strings.Builder
 
 	menuWidth := 30
 	for i, opt := range options {
 		style := lipgloss.NewStyle().Width(menuWidth).PaddingLeft(2)
 		if i == m.SelectedMenuIndex {
-			s.WriteString(style.Foreground(PrimaryColor).Bold(true).Render("▶ "+opt) + "\n")
+			s.WriteString(style.Foreground(PrimaryColor).Bold(true).Render("▶ "+opt.Label) + "\n")
 		} else {
-			s.WriteString(style.Foreground(GrayColor).Render("  "+opt) + "\n")
+			s.WriteString(style.Foreground(GrayColor).Render("  "+opt.Label) + "\n")
 		}
 	}
 
