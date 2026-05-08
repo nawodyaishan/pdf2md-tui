@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 	"github.com/nawodyaishan/pdf2md-tui/internal/handler/tui"
 	"github.com/nawodyaishan/pdf2md-tui/internal/repository/discovery"
@@ -20,7 +21,6 @@ import (
 	"github.com/nawodyaishan/pdf2md-tui/internal/repository/storage"
 	"github.com/nawodyaishan/pdf2md-tui/internal/repository/sysinfo"
 	"github.com/nawodyaishan/pdf2md-tui/internal/service"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
@@ -164,7 +164,7 @@ var convertCmd = &cobra.Command{
 			tuiModel = tui.NewModel(len(convertible), numWorkers)
 			prog = tea.NewProgram(tuiModel, tea.WithAltScreen())
 			msgChan = make(chan tea.Msg)
-			
+
 			// Bridge msgChan to prog
 			go func() {
 				for msg := range msgChan {
@@ -249,13 +249,13 @@ var convertCmd = &cobra.Command{
 			if err != nil {
 				pterm.Error.Printf("UI error: %v\n", err)
 			}
-			
+
 			// Restore logger
 			pterm.DefaultLogger.Writer = logF
 			if verbose {
 				pterm.DefaultLogger.Writer = io.MultiWriter(logF, os.Stderr)
 			}
-			
+
 			// Handle the integrated menu selection
 			if m, ok := finalModel.(tui.Model); ok {
 				allResults = m.Results

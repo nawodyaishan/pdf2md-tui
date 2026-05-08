@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 	"github.com/pterm/pterm"
 	"github.com/pterm/pterm/putils"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 const (
@@ -132,7 +132,9 @@ func (p *Progress) renderLiveDashboard() {
 	// 2. Resource Info (Compact)
 	cpuWidth := 15
 	cpuFilled := int((p.lastSysInfo.CPUUsage / 100.0) * float64(cpuWidth))
-	if cpuFilled > cpuWidth { cpuFilled = cpuWidth }
+	if cpuFilled > cpuWidth {
+		cpuFilled = cpuWidth
+	}
 	cpuBar := fmt.Sprintf("[%s%s]",
 		pterm.LightMagenta(strings.Repeat("■", cpuFilled)),
 		pterm.NewStyle(pterm.FgGray).Sprint(strings.Repeat(" ", cpuWidth-cpuFilled)),

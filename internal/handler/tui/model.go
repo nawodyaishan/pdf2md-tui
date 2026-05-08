@@ -27,11 +27,11 @@ type BatchCompleteMsg struct {
 // Model represents the TUI state
 type Model struct {
 	// State
-	TotalFiles   int
-	CurrentFile  int
-	WorkerCount  int
-	Results      []domain.Result
-	SysInfo      domain.SysInfo
+	TotalFiles    int
+	CurrentFile   int
+	WorkerCount   int
+	Results       []domain.Result
+	SysInfo       domain.SysInfo
 	StartTime     time.Time
 	FinalDuration time.Duration
 	Complete      bool
@@ -115,7 +115,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SysInfoMsg:
 		if !m.Complete {
 			m.SysInfo = msg.Info
-			
+
 			// Update Peaks
 			if msg.Info.CPUUsage > m.PeakCPU {
 				m.PeakCPU = msg.Info.CPUUsage
@@ -126,7 +126,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Info.MemoryPct > m.MaxMemPct {
 				m.MaxMemPct = msg.Info.MemoryPct
 			}
-			
+
 			// Accumulate for average
 			m.AvgCPU += msg.Info.CPUUsage
 			m.sysCount++
@@ -167,7 +167,7 @@ func (m Model) renderHeader() string {
 	if m.Complete {
 		status = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true).Render(" SUCCESS ")
 	}
-	
+
 	return HeaderStyle.Width(m.width).Render(
 		lipgloss.JoinHorizontal(lipgloss.Center, title, " ", status),
 	)
@@ -182,4 +182,3 @@ func (m Model) renderFooter() string {
 	}
 	return FooterStyle.Width(m.width).Render(" [q] Quit • [l] Logs • [o] Open Output ")
 }
-

@@ -85,7 +85,7 @@ func (m Model) renderFileTable() string {
 
 	var s strings.Builder
 	s.WriteString(lipgloss.NewStyle().Bold(true).Render("Recent Activity") + "\n\n")
-	
+
 	count := 0
 	for i := len(m.Results) - 1; i >= 0 && count < 10; i-- {
 		res := m.Results[i]
@@ -104,7 +104,7 @@ func renderProgressBar(current, total, width int, color lipgloss.Color) string {
 	if total == 0 {
 		return "[]"
 	}
-	
+
 	// Success Bloom: turn green if complete
 	if current >= total && total > 0 {
 		color = lipgloss.Color("#00FF00")
@@ -229,9 +229,9 @@ func (m Model) renderCompletionMenu() string {
 	for i, opt := range options {
 		style := lipgloss.NewStyle().Width(menuWidth).PaddingLeft(2)
 		if i == m.SelectedMenuIndex {
-			s.WriteString(style.Foreground(PrimaryColor).Bold(true).Render("▶ " + opt) + "\n")
+			s.WriteString(style.Foreground(PrimaryColor).Bold(true).Render("▶ "+opt) + "\n")
 		} else {
-			s.WriteString(style.Foreground(GrayColor).Render("  " + opt) + "\n")
+			s.WriteString(style.Foreground(GrayColor).Render("  "+opt) + "\n")
 		}
 	}
 
