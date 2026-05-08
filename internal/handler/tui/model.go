@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -209,23 +210,49 @@ func (m Model) View() string {
 }
 
 func (m Model) renderHeader() string {
-	title := TitleStyle.Render(" PDF2MD-TUI ")
-	status := " Processing..."
+	title := TitleStyle.Render(" PDF2MD ")
+	status := StatusActiveStyle.Render("LIVE")
 	if m.Complete {
-		status = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true).Render(" SUCCESS ")
+		status = StatusSuccessStyle.Render("COMPLETE")
 	}
 
+	meta := fmt.Sprintf("%d/%d files • %d workers", m.CurrentFile, m.TotalFiles, m.WorkerCount)
+	if m.Complete {
+		meta = fmt.Sprintf("%d files processed • %.2fs", len(m.Results), m.FinalDuration.Seconds())
+	}
+
+	content := lipgloss.JoinHorizontal(lipgloss.Center,
+		title,
+		" ",
+		status,
+		"  ",
+		SubtleTextStyle.Render(meta),
+	)
+
 	return HeaderStyle.Width(m.width).Render(
-		lipgloss.JoinHorizontal(lipgloss.Center, title, " ", status),
+		content,
 	)
 }
 
 func (m Model) renderFooter() string {
 	if m.Complete {
-		msg := " [enter] Select • [q] Exit "
+		msg := lipgloss.JoinHorizontal(lipgloss.Left,
+			KeyHintStyle.Render("enter"),
+			" ",
+			KeyHintMutedStyle.Render("select"),
+			"  ",
+			KeyHintStyle.Render("q"),
+			" ",
+			KeyHintMutedStyle.Render("exit"),
+		)
 		return FooterStyle.Width(m.width).Render(
 			SuccessFooterStyle.Render(msg),
 		)
 	}
-	return FooterStyle.Width(m.width).Render(" Conversion in progress • completion actions unlock when finished ")
+	msg := lipgloss.JoinHorizontal(lipgloss.Left,
+		StatusMutedStyle.Render("RUNNING"),
+		"  ",
+		SubtleTextStyle.Render("live conversion dashboard • completion actions unlock when the batch finishes"),
+	)
+	return FooterStyle.Width(m.width).Render(msg)
 }

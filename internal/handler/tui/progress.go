@@ -7,10 +7,10 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/version"
 	"github.com/pterm/pterm"
-	"github.com/pterm/pterm/putils"
 )
 
 const (
@@ -40,19 +40,25 @@ func (p *Progress) SetBatchInfo(total, workers int) {
 
 // PrintBanner renders the branded startup banner.
 func (p *Progress) PrintBanner() {
-	banner, _ := pterm.DefaultBigText.WithLetters(
-		putils.LettersFromStringWithStyle("pdf", pterm.NewStyle(pterm.FgCyan)),
-		putils.LettersFromStringWithStyle("2md", pterm.NewStyle(pterm.FgLightMagenta)),
-	).Srender()
-	pterm.Print(banner)
+	brand := lipgloss.JoinHorizontal(lipgloss.Left,
+		TitleStyle.Render(" PDF2MD "),
+		" ",
+		StatusMutedStyle.Render("TUI"),
+	)
+	subtitle := lipgloss.NewStyle().
+		Foreground(PrimaryColor).
+		Italic(true).
+		Render("LLM-optimized PDF → Markdown converter")
+	meta := SubtleTextStyle.Render(fmt.Sprintf("v%s • by @%s", version.Version, author))
 
-	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
-		pterm.NewStyle(pterm.FgLightCyan, pterm.Italic).Sprint("⚡ LLM-Optimized PDF → Markdown Converter"),
-	)
-	pterm.DefaultCenter.WithCenterEachLineSeparately().Println(
-		pterm.NewStyle(pterm.FgGray).Sprintf("v%s • by @%s", version.Version, author),
-	)
-	pterm.Println() // breathing room
+	banner := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(GrayColor).
+		Padding(1, 2).
+		Render(lipgloss.JoinVertical(lipgloss.Left, brand, subtitle, meta))
+
+	pterm.Println(banner)
+	pterm.Println()
 }
 
 // StartDiscovery starts the spinner for the discovery phase.

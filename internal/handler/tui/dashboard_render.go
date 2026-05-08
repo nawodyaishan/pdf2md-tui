@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -15,48 +16,63 @@ func (m Model) renderDashboard() string {
 		return m.renderCompletionView()
 	}
 
-	// 1. Stats Panel (Left)
 	stats := m.renderStats()
-	// 2. Core Grid Panel (Right)
 	cores := m.renderCoreGrid()
-
-	// 3. File Table (Bottom)
 	table := m.renderFileTable()
 
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top,
-		BorderStyle.Width(m.width/2-2).Height(10).Render(stats),
-		BorderStyle.Width(m.width/2-2).Height(10).Render(cores),
-	)
+	contentWidth := availableWidth(m.width, 4, 16, 120)
+	panelHeight := 10
+
+	var topRow string
+	if m.width < 90 {
+		statsPanel := BorderStyle.Width(contentWidth).Height(panelHeight).Render(stats)
+		coresPanel := BorderStyle.Width(contentWidth).Height(panelHeight).Render(cores)
+		topRow = lipgloss.JoinVertical(lipgloss.Left, statsPanel, coresPanel)
+	} else {
+		panelWidth := maxInt(20, (contentWidth-2)/2)
+		topRow = lipgloss.JoinHorizontal(lipgloss.Top,
+			BorderStyle.Width(panelWidth).Height(panelHeight).Render(stats),
+			BorderStyle.Width(panelWidth).Height(panelHeight).Render(cores),
+		)
+	}
+
+	tableHeight := maxInt(6, m.height-lipgloss.Height(topRow)-6)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		topRow,
-		BorderStyle.Width(m.width-4).Height(m.height-22).Render(table),
+		BorderStyle.Width(contentWidth).Height(tableHeight).Render(table),
 	)
 }
 
 func (m Model) renderStats() string {
 	cpuUsage := m.SysInfo.CPUUsage
 	memPct := m.SysInfo.MemoryPct
+	barWidth := 16
+	if m.width < 90 {
+		barWidth = 12
+	}
 
-	cpuBar := renderProgressBar(int(cpuUsage), 100, 20, PrimaryColor)
-	memBar := renderProgressBar(int(memPct), 100, 20, SecondaryColor)
+	cpuBar := renderProgressBar(int(cpuUsage), 100, barWidth, SecondaryColor)
+	memBar := renderProgressBar(int(memPct), 100, barWidth, AccentColor)
+	batchBar := renderProgressBar(m.CurrentFile, m.TotalFiles, barWidth, PrimaryColor)
 
-	// Batch Progress
-	batchBar := renderProgressBar(m.CurrentFile, m.TotalFiles, 20, AccentColor)
-
-	return fmt.Sprintf(
-		"%s %s %s\n%s %s %s\n%s %s %s\n\n%s %s",
-		MetricLabelStyle.Render("CPU Load"), cpuBar, MetricValueStyle.Render(fmt.Sprintf("%.1f%%", cpuUsage)),
-		MetricLabelStyle.Render("Memory"), memBar, MetricValueStyle.Render(fmt.Sprintf("%.1f%%", memPct)),
-		MetricLabelStyle.Render("Batch"), batchBar, MetricValueStyle.Render(fmt.Sprintf("%d/%d", m.CurrentFile, m.TotalFiles)),
-		MetricLabelStyle.Render("Uptime"), MetricValueStyle.Render(timeSince(m.StartTime)),
+	return lipgloss.JoinVertical(lipgloss.Left,
+		CardTitleStyle.Render("Pipeline Metrics"),
+		SubtleTextStyle.Render("throughput, resource load, and session uptime"),
+		"",
+		renderMetricLine("Batch", batchBar, fmt.Sprintf("%d/%d", m.CurrentFile, m.TotalFiles)),
+		renderMetricLine("CPU", cpuBar, fmt.Sprintf("%.1f%%", cpuUsage)),
+		renderMetricLine("Memory", memBar, fmt.Sprintf("%.1f%%", memPct)),
+		"",
+		renderInlinePair("Uptime", timeSince(m.StartTime), "Workers", fmt.Sprintf("%d", m.WorkerCount)),
 	)
 }
 
 func (m Model) renderCoreGrid() string {
 	totalCores := runtime.NumCPU()
 	var grid strings.Builder
-	grid.WriteString(lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true).Render("ENGINE CORE MAP") + "\n\n")
+	grid.WriteString(CardTitleStyle.Render("Worker Topology") + "\n")
+	grid.WriteString(SubtleTextStyle.Render(fmt.Sprintf("%d active workers across %d logical cores", m.WorkerCount, totalCores)) + "\n\n")
 
 	cols := 8
 	if m.width < 100 {
@@ -65,36 +81,47 @@ func (m Model) renderCoreGrid() string {
 
 	for i := 0; i < totalCores; i++ {
 		style := DimmedStyle
-		char := "□"
+		char := "·"
 		if i < m.WorkerCount {
 			style = CoreActiveStyle
-			char = "▣"
+			char = "●"
 		}
-		grid.WriteString(style.Render(" " + char + " "))
+		grid.WriteString(style.Render(char + " "))
 		if (i+1)%cols == 0 {
 			grid.WriteString("\n")
 		}
 	}
+
+	grid.WriteString("\n")
+	grid.WriteString(renderInlinePair("Parallelism", fmt.Sprintf("%.1fx", float64(m.WorkerCount)), "Host", runtime.GOOS))
 
 	return grid.String()
 }
 
 func (m Model) renderFileTable() string {
 	if len(m.Results) == 0 {
-		return "Waiting for workers..."
+		return lipgloss.JoinVertical(lipgloss.Left,
+			CardTitleStyle.Render("Recent Activity"),
+			SubtleTextStyle.Render("waiting for workers to emit the first result"),
+		)
 	}
 
 	var s strings.Builder
-	s.WriteString(lipgloss.NewStyle().Bold(true).Render("Recent Activity") + "\n\n")
+	s.WriteString(CardTitleStyle.Render("Recent Activity") + "\n")
+	s.WriteString(SubtleTextStyle.Render("latest completed files in this batch") + "\n\n")
 
 	count := 0
 	for i := len(m.Results) - 1; i >= 0 && count < 10; i-- {
 		res := m.Results[i]
-		status := CoreActiveStyle.Render("✔")
-		if res.Err != nil {
-			status = lipgloss.NewStyle().Foreground(SecondaryColor).Render("✘")
+		name := truncatePath(filepath.Base(res.InputPath), 28)
+		if name == "" {
+			name = truncatePath(res.InputPath, 28)
 		}
-		fmt.Fprintf(&s, "%s %-40s %s\n", status, truncatePath(res.InputPath, 40), formatDuration(res.Duration))
+		fmt.Fprintf(&s, "%s  %s  %s\n",
+			renderResultStatus(res),
+			ValueStrongStyle.Render(name),
+			SubtleTextStyle.Render(formatDuration(res.Duration)),
+		)
 		count++
 	}
 
@@ -108,7 +135,7 @@ func renderProgressBar(current, total, width int, color lipgloss.Color) string {
 
 	// Success Bloom: turn green if complete
 	if current >= total && total > 0 {
-		color = lipgloss.Color("#00FF00")
+		color = SuccessColor
 	}
 
 	ratio := float64(current) / float64(total)
@@ -135,8 +162,14 @@ func formatDuration(d time.Duration) string {
 }
 
 func (m Model) renderCompletionView() string {
-	summary := m.renderSummaryPanel()
-	menu := m.renderCompletionMenu()
+	cardWidth := availableWidth(m.width, 8, 24, 110)
+	summary := m.renderSummaryPanel(cardWidth)
+	menu := lipgloss.JoinVertical(lipgloss.Left,
+		CardTitleStyle.Render("Next Action"),
+		SubtleTextStyle.Render("choose what happens after this batch"),
+		"",
+		m.renderCompletionMenu(cardWidth),
+	)
 
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		summary,
@@ -144,14 +177,29 @@ func (m Model) renderCompletionView() string {
 		menu,
 	)
 
-	return lipgloss.Place(m.width, m.height-5, lipgloss.Center, lipgloss.Center,
-		BorderStyle.BorderForeground(lipgloss.Color("#00FF00")).
-			Padding(1, 4).
-			Render(content),
-	)
+	horizontalPadding := 1
+	if cardWidth >= 60 {
+		horizontalPadding = 2
+	}
+	if cardWidth >= 84 {
+		horizontalPadding = 3
+	}
+
+	card := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(GrayColor).
+		Padding(1, horizontalPadding).
+		Render(content)
+
+	topPadding := clampInt((m.height-lipgloss.Height(card))/4, 0, 4)
+	placed := lipgloss.PlaceHorizontal(m.width, lipgloss.Center, card)
+	if topPadding == 0 {
+		return placed
+	}
+	return strings.Repeat("\n", topPadding) + placed
 }
 
-func (m Model) renderSummaryPanel() string {
+func (m Model) renderSummaryPanel(width int) string {
 	var results = m.Results
 	var totalIn, totalOut int64
 	var totalInTkn, totalOutTkn int
@@ -176,7 +224,12 @@ func (m Model) renderSummaryPanel() string {
 		savings = float64(totalIn-totalOut) / float64(totalIn) * 100
 	}
 
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true).Render("📊 CONVERSION SUMMARY")
+	title := lipgloss.NewStyle().
+		Width(width).
+		Align(lipgloss.Center).
+		Foreground(TextColor).
+		Bold(true).
+		Render("Session Summary")
 
 	avgCPU := 0.0
 	if m.sysCount > 0 {
@@ -189,63 +242,173 @@ func (m Model) renderSummaryPanel() string {
 	}
 
 	leftCol := fmt.Sprintf(
-		"Files Processed: %d\nErrors / Ignored: %s\nTotal Duration:  %.2fs",
-		len(results),
-		formatErrorCount(errCount, ignoredCount),
-		duration.Seconds(),
+		"%s\n%s\n%s",
+		renderSummaryField("Files Processed", fmt.Sprintf("%d", len(results))),
+		renderSummaryField("Errors / Ignored", formatErrorCount(errCount, ignoredCount)),
+		renderSummaryField("Total Duration", fmt.Sprintf("%.2fs", duration.Seconds())),
 	)
 
 	midCol := fmt.Sprintf(
-		"PDF Source: %s (%d tkn)\nMD Output:  %s (%d tkn)\nEfficiency: ▼ %.1f%%",
-		formatBytes(totalIn), totalInTkn,
-		formatBytes(totalOut), totalOutTkn,
-		savings,
+		"%s\n%s\n%s",
+		renderSummaryField("PDF Source", fmt.Sprintf("%s (%d tkn)", formatBytes(totalIn), totalInTkn)),
+		renderSummaryField("MD Output", fmt.Sprintf("%s (%d tkn)", formatBytes(totalOut), totalOutTkn)),
+		renderSummaryField("Efficiency", fmt.Sprintf("▼ %.1f%%", savings)),
 	)
 
 	rightCol := fmt.Sprintf(
-		"Cores Utilized: %d/%d\nAvg CPU Load:   %.1f%%\nPeak Memory:    %s (%.1f%%)",
-		m.WorkerCount, runtime.NumCPU(),
-		avgCPU,
-		formatBytes(int64(m.PeakMemory)), m.MaxMemPct,
+		"%s\n%s\n%s",
+		renderSummaryField("Cores Utilized", fmt.Sprintf("%d/%d", m.WorkerCount, runtime.NumCPU())),
+		renderSummaryField("Avg CPU Load", fmt.Sprintf("%.1f%%", avgCPU)),
+		renderSummaryField("Peak Memory", fmt.Sprintf("%s (%.1f%%)", formatBytes(int64(m.PeakMemory)), m.MaxMemPct)),
 	)
 
-	stats := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(35).Render(leftCol),
-		lipgloss.NewStyle().Width(35).Render(midCol),
-		lipgloss.NewStyle().Width(35).Render(rightCol),
-	)
+	stats := m.renderSummaryStats(width, leftCol, midCol, rightCol)
+	subtitle := lipgloss.NewStyle().
+		Width(width).
+		MaxWidth(width).
+		Align(lipgloss.Center).
+		Foreground(LightGrayColor).
+		Render("conversion outcomes, output efficiency, and resource peaks")
 
-	return lipgloss.JoinVertical(lipgloss.Center, title, "\n", stats)
+	return lipgloss.JoinVertical(lipgloss.Center,
+		title,
+		subtitle,
+		"",
+		stats,
+	)
+}
+
+func renderSummaryField(label, value string) string {
+	return lipgloss.JoinVertical(lipgloss.Left,
+		SectionTitleStyle.Render(label),
+		ValueStrongStyle.Render(value),
+	)
+}
+
+func renderMetricLine(label, bar, value string) string {
+	return lipgloss.JoinHorizontal(lipgloss.Center,
+		MetricLabelStyle.Render(label),
+		bar,
+		" ",
+		ValueStrongStyle.Render(value),
+	)
+}
+
+func renderInlinePair(leftLabel, leftValue, rightLabel, rightValue string) string {
+	return lipgloss.JoinHorizontal(lipgloss.Left,
+		SectionTitleStyle.Render(leftLabel),
+		" ",
+		ValueStrongStyle.Render(leftValue),
+		"   ",
+		SectionTitleStyle.Render(rightLabel),
+		" ",
+		ValueStrongStyle.Render(rightValue),
+	)
+}
+
+func renderResultStatus(res domain.Result) string {
+	switch {
+	case res.Err != nil || res.Status == domain.StatusError:
+		return statusPill("FAIL", ErrorColor)
+	case res.Status == domain.StatusIgnored:
+		return statusPill("SKIP", WarningColor)
+	default:
+		return statusPill("DONE", SuccessColor)
+	}
+}
+
+func statusPill(label string, color lipgloss.Color) string {
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Bold(true).
+		Render(label)
+}
+
+func (m Model) renderSummaryStats(width int, leftCol, midCol, rightCol string) string {
+	sections := []string{leftCol, midCol, rightCol}
+	gap := 2
+
+	switch {
+	case width >= 96:
+		colWidth := maxInt(24, (width-(gap*2))/3)
+		return lipgloss.JoinHorizontal(lipgloss.Top,
+			renderSummarySection(sections[0], colWidth),
+			renderSummarySection(sections[1], colWidth),
+			renderSummarySection(sections[2], colWidth),
+		)
+	case width >= 64:
+		colWidth := maxInt(24, (width-gap)/2)
+		topRow := lipgloss.JoinHorizontal(lipgloss.Top,
+			renderSummarySection(sections[0], colWidth),
+			renderSummarySection(sections[1], colWidth),
+		)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			topRow,
+			renderSummarySection(sections[2], width),
+		)
+	default:
+		rendered := make([]string, 0, len(sections))
+		for _, section := range sections {
+			rendered = append(rendered, renderSummarySection(section, width))
+		}
+		return lipgloss.JoinVertical(lipgloss.Left, rendered...)
+	}
+}
+
+func renderSummarySection(content string, width int) string {
+	innerWidth := maxInt(1, width-2)
+	return lipgloss.NewStyle().
+		Width(innerWidth).
+		MaxWidth(innerWidth).
+		Padding(1, 1).
+		Render(content)
 }
 
 func formatErrorCount(errs, ignored int) string {
 	if errs == 0 && ignored == 0 {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Render("✓ None")
+		return lipgloss.NewStyle().Foreground(SuccessColor).Render("None")
 	}
 	if errs > 0 && ignored > 0 {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("✘ %d errors, %d skipped", errs, ignored))
+		return lipgloss.NewStyle().Foreground(ErrorColor).Render(fmt.Sprintf("%d errors, %d skipped", errs, ignored))
 	}
 	if errs > 0 {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("✘ %d errors", errs))
+		return lipgloss.NewStyle().Foreground(ErrorColor).Render(fmt.Sprintf("%d errors", errs))
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD166")).Render(fmt.Sprintf("⚠ %d skipped", ignored))
+	return lipgloss.NewStyle().Foreground(WarningColor).Render(fmt.Sprintf("%d skipped", ignored))
 }
 
-func (m Model) renderCompletionMenu() string {
+func (m Model) renderCompletionMenu(width int) string {
 	options := m.completionMenuItems()
 	var s strings.Builder
 
-	menuWidth := 30
+	menuWidth := availableWidth(width, 0, 18, 34)
+	contentWidth := maxInt(1, menuWidth-2)
 	for i, opt := range options {
-		style := lipgloss.NewStyle().Width(menuWidth).PaddingLeft(2)
+		label := completionMenuLabel(opt, menuWidth)
+		style := lipgloss.NewStyle().Width(contentWidth).MaxWidth(contentWidth).PaddingLeft(2)
 		if i == m.SelectedMenuIndex {
-			s.WriteString(style.Foreground(PrimaryColor).Bold(true).Render("▶ "+opt.Label) + "\n")
+			s.WriteString(style.Foreground(SecondaryColor).Bold(true).Render("▶ "+label) + "\n")
 		} else {
-			s.WriteString(style.Foreground(GrayColor).Render("  "+opt.Label) + "\n")
+			s.WriteString(style.Foreground(GrayColor).Render("  "+label) + "\n")
 		}
 	}
 
 	return s.String()
+}
+
+func completionMenuLabel(item completionMenuItem, width int) string {
+	if width >= 26 {
+		return item.Label
+	}
+
+	switch item.Action {
+	case CompletionActionOpenDir:
+		return "Open Output Folder"
+	case CompletionActionViewLog:
+		return "View Detailed Log"
+	default:
+		return item.Label
+	}
 }
 
 func formatBytes(b int64) string {
@@ -263,4 +426,35 @@ func formatBytes(b int64) string {
 
 func timeSince(t time.Time) string {
 	return fmt.Sprintf("%ds", int(time.Since(t).Seconds()))
+}
+
+func availableWidth(viewportWidth, margin, minWidth, maxWidth int) int {
+	width := viewportWidth - margin
+	if width <= 0 {
+		width = viewportWidth
+	}
+	if width <= 0 {
+		return minWidth
+	}
+	if width < minWidth {
+		return width
+	}
+	return clampInt(width, minWidth, maxWidth)
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

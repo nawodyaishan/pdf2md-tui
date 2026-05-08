@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
 )
 
@@ -83,5 +85,43 @@ func TestActiveConversionIgnoresQ(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Fatal("expected no quit command during active conversion")
+	}
+}
+
+func TestRenderSummaryPanelStacksWithinNarrowWidth(t *testing.T) {
+	model := NewModel(3, 2)
+	model.Complete = true
+	model.Results = []domain.Result{
+		{Status: domain.StatusOK, InputBytes: 1024, OutputBytes: 512, InputTokens: 10, OutputTokens: 5},
+		{Status: domain.StatusOK, InputBytes: 2048, OutputBytes: 1024, InputTokens: 20, OutputTokens: 10},
+		{Status: domain.StatusIgnored},
+	}
+	model.PeakMemory = 4096
+
+	rendered := model.renderSummaryPanel(54)
+
+	if lipgloss.Width(rendered) > 54 {
+		t.Fatalf("expected summary width <= 54, got %d", lipgloss.Width(rendered))
+	}
+	if !strings.Contains(rendered, "Session Summary") || !strings.Contains(rendered, "Files Processed") {
+		t.Fatal("expected responsive summary to retain the redesigned summary structure")
+	}
+}
+
+func TestRenderCompletionMenuUsesFullLabelOnNarrowWidth(t *testing.T) {
+	model := NewModel(1, 1)
+	model.Complete = true
+	model.Results = []domain.Result{{Status: domain.StatusError, Err: domain.ErrRequiresOCR}}
+
+	rendered := model.renderCompletionMenu(24)
+
+	if !strings.Contains(rendered, "Open Output") {
+		t.Fatal("expected menu to keep the open output action visible")
+	}
+	if !strings.Contains(rendered, "View Detailed Log") {
+		t.Fatal("expected menu to show failure action")
+	}
+	if lipgloss.Width(rendered) > 24 {
+		t.Fatalf("expected menu width <= 24, got %d", lipgloss.Width(rendered))
 	}
 }
