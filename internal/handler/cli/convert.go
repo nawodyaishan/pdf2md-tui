@@ -25,6 +25,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type conversionTotals struct {
+	inputBytes  int64
+	outputBytes int64
+	duration    time.Duration
+	errCount    int
+	ignored     int
+	converted   int
+}
+
 var convertCmd = &cobra.Command{
 	Use:   "convert [directory]",
 	Short: "Convert PDFs in the given directory to Markdown",
@@ -76,11 +85,6 @@ var convertCmd = &cobra.Command{
 			return nil
 		}
 
-		outDirPath := filepath.Join(targetDir, outputDir)
-		if err := os.MkdirAll(outDirPath, 0755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
-		}
-
 		cfg := domain.NewConfig()
 		cfg.DateFormat = dateFormat
 		cfg.StripNoise = stripNoise
@@ -90,37 +94,31 @@ var convertCmd = &cobra.Command{
 		parser := pdf.NewParser()
 		tokenCount, _ := pdf.NewTokenizer()
 		conv := service.NewConverterService(cfg, store, parser, tokenCount)
+		outDirPath := filepath.Join(targetDir, outputDir)
 
-		// Pre-flight: detect output files that already exist.
-		if !forceOverwrite && !quiet {
-			var existing []string
-			for _, f := range pdfFiles {
-				if store.FileExists(conv.OutputPath(f, outDirPath)) {
-					existing = append(existing, conv.OutputPath(f, outDirPath))
-				}
+		existing := existingOutputPaths(pdfFiles, conv, store, outDirPath)
+		needsPrompt, overwriteErr := resolveOverwritePolicy(existing, forceOverwrite, !quiet && tui.IsInteractive())
+		if overwriteErr != nil {
+			return overwriteErr
+		}
+		if needsPrompt {
+			ok, promptErr := ui.ConfirmOverwrite(existing)
+			if promptErr != nil {
+				return promptErr
 			}
-			if len(existing) > 0 {
-				if tui.IsInteractive() {
-					ok, promptErr := ui.ConfirmOverwrite(existing)
-					if promptErr != nil {
-						return promptErr
-					}
-					if !ok {
-						fmt.Println("Conversion cancelled.")
-						return nil
-					}
-				} else {
-					ui.WarnOverwrite(existing)
-				}
+			if !ok {
+				fmt.Println("Conversion cancelled.")
+				return nil
 			}
 		}
+		if err := os.MkdirAll(outDirPath, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
 
-		// Results collection for JSON summary
-		var allResults []domain.Result
+		var preflightResults []domain.Result
 
 		// Pre-flight: Detect scanned/image-only PDFs (OCR heuristic)
 		var convertible []string
-		var ignoredCount int
 		for _, f := range pdfFiles {
 			doc, err := parser.OpenDocument(f)
 			if err == nil {
@@ -129,9 +127,8 @@ var convertCmd = &cobra.Command{
 			}
 
 			if errors.Is(err, domain.ErrRequiresOCR) {
-				ignoredCount++
 				pterm.DefaultLogger.Warn("Skipping file: Requires OCR", pterm.DefaultLogger.Args("file", f))
-				allResults = append(allResults, domain.Result{
+				preflightResults = append(preflightResults, domain.Result{
 					InputPath: f,
 					Status:    domain.StatusIgnored,
 				})
@@ -141,10 +138,11 @@ var convertCmd = &cobra.Command{
 		}
 
 		if len(convertible) == 0 {
+			totals := summarizeResults(preflightResults)
 			if !quiet {
-				ui.PrintSummary(allResults, 0, 0, 0, 0, ignoredCount, domain.SysInfo{})
+				ui.PrintSummary(preflightResults, totals.inputBytes, totals.outputBytes, totals.duration, totals.errCount, totals.ignored, domain.SysInfo{})
 			} else {
-				printJSONSummary(allResults, 0, 0, 0, ignoredCount)
+				printJSONSummary(preflightResults, totals)
 			}
 			return nil
 		}
@@ -154,12 +152,13 @@ var convertCmd = &cobra.Command{
 			numWorkers = runtime.NumCPU()
 		}
 
+		useDashboard := !quiet && tui.IsInteractive()
 		var prog *tea.Program
 		var finalModel tea.Model
 		var msgChan chan tea.Msg
 		var tuiModel tui.Model
 
-		if !quiet {
+		if useDashboard {
 			ui.SetBatchInfo(len(convertible), numWorkers)
 			tuiModel = tui.NewModel(len(convertible), numWorkers)
 			prog = tea.NewProgram(tuiModel, tea.WithAltScreen())
@@ -235,14 +234,13 @@ var convertCmd = &cobra.Command{
 			sysCancel() // Stop tracking resources immediately
 			if msgChan != nil {
 				msgChan <- tui.BatchCompleteMsg{} // Trigger UI pause
+				close(msgChan)
 			}
 		}()
 
-		var totalIn, totalOut int64
-		var totalDur time.Duration
-		var errCount int
+		var liveResults []domain.Result
 
-		if !quiet {
+		if useDashboard {
 			// Now run the TUI in main thread
 			var err error
 			finalModel, err = prog.Run()
@@ -251,63 +249,116 @@ var convertCmd = &cobra.Command{
 			}
 
 			// Restore logger
-			pterm.DefaultLogger.Writer = logF
-			if verbose {
+			if logF != nil {
+				pterm.DefaultLogger.Writer = logF
+			}
+			if verbose && logF != nil {
 				pterm.DefaultLogger.Writer = io.MultiWriter(logF, os.Stderr)
 			}
 
-			// Handle the integrated menu selection
 			if m, ok := finalModel.(tui.Model); ok {
-				allResults = m.Results
-				if m.SelectedMenuIndex == 0 {
-					// Open Folder selected
+				liveResults = append(liveResults, m.Results...)
+				switch m.CompletionAction {
+				case tui.CompletionActionOpenDir:
 					_ = openDir(outDirPath)
+				case tui.CompletionActionViewLog:
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Detailed log: %s\n", logFile)
 				}
 			}
 		} else {
-			// Non-interactive mode just waits for results
+			// Non-interactive mode waits for results and prints a plain-text summary.
 			for res := range workerResults {
-				allResults = append(allResults, res)
-				if res.Err != nil {
-					errCount++
-				} else {
-					totalIn += res.InputBytes
-					totalOut += res.OutputBytes
-					totalDur += res.Duration
-				}
+				liveResults = append(liveResults, res)
 			}
 		}
 
-		if !quiet {
-			sysCancel() // Stop tracking
-		} else {
-			printJSONSummary(allResults, totalIn, totalOut, totalDur, ignoredCount)
+		allResults := mergeResults(preflightResults, liveResults)
+		totals := summarizeResults(allResults)
+
+		if !useDashboard {
+			sysCancel()
 		}
 
-		if errCount > 0 {
-			return fmt.Errorf("conversion completed with %d errors; see %s for details", errCount, logFile)
+		if quiet {
+			printJSONSummary(allResults, totals)
+		} else {
+			if !useDashboard {
+				if totals.errCount > 0 {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Detailed log: %s\n", logFile)
+				}
+				printTextSummary(cmd.OutOrStdout(), allResults, totals, maxSys)
+			}
+		}
+
+		if totals.errCount > 0 {
+			return fmt.Errorf("conversion completed with %d errors; see %s for details", totals.errCount, logFile)
 		}
 		return nil
 	},
 }
 
-func printJSONSummary(results []domain.Result, totalIn, totalOut int64, duration time.Duration, ignored int) {
+func mergeResults(preflightResults, liveResults []domain.Result) []domain.Result {
+	results := make([]domain.Result, 0, len(preflightResults)+len(liveResults))
+	results = append(results, preflightResults...)
+	results = append(results, liveResults...)
+	return results
+}
+
+func summarizeResults(results []domain.Result) conversionTotals {
+	var totals conversionTotals
+
+	for _, res := range results {
+		switch {
+		case res.Err != nil || res.Status == domain.StatusError:
+			totals.errCount++
+		case res.Status == domain.StatusIgnored:
+			totals.ignored++
+		default:
+			totals.converted++
+			totals.inputBytes += res.InputBytes
+			totals.outputBytes += res.OutputBytes
+			totals.duration += res.Duration
+		}
+	}
+
+	return totals
+}
+
+func existingOutputPaths(pdfFiles []string, conv *service.ConverterService, store domain.PDFStorage, outDirPath string) []string {
+	var existing []string
+	for _, f := range pdfFiles {
+		outPath := conv.OutputPath(f, outDirPath)
+		if store.FileExists(outPath) {
+			existing = append(existing, outPath)
+		}
+	}
+	return existing
+}
+
+func resolveOverwritePolicy(existing []string, force, interactive bool) (bool, error) {
+	if force || len(existing) == 0 {
+		return false, nil
+	}
+	if interactive {
+		return true, nil
+	}
+	return false, fmt.Errorf("refusing to overwrite %d existing output file(s) without --force", len(existing))
+}
+
+func printJSONSummary(results []domain.Result, totals conversionTotals) {
 	summary := domain.Summary{
-		Duration:  duration.String(),
-		Converted: 0,
-		Skipped:   ignored,
-		Errors:    0,
+		Duration:  totals.duration.String(),
+		Converted: totals.converted,
+		Skipped:   totals.ignored,
+		Errors:    totals.errCount,
 	}
 
 	for _, res := range results {
 		status := "ok"
 		if res.Status == domain.StatusIgnored {
 			status = "ignored"
-		} else if res.Err != nil {
+		} else if res.Err != nil || res.Status == domain.StatusError {
 			status = "error"
-			summary.Errors++
-		} else {
-			summary.Converted++
 		}
 
 		errMsg := ""
@@ -327,6 +378,27 @@ func printJSONSummary(results []domain.Result, totalIn, totalOut int64, duration
 
 	data, _ := json.MarshalIndent(summary, "", "  ")
 	fmt.Println(string(data))
+}
+
+func printTextSummary(w io.Writer, results []domain.Result, totals conversionTotals, sys domain.SysInfo) {
+	_, _ = fmt.Fprintln(w, "Conversion summary")
+	_, _ = fmt.Fprintf(w, "Converted: %d\n", totals.converted)
+	_, _ = fmt.Fprintf(w, "Skipped: %d\n", totals.ignored)
+	_, _ = fmt.Fprintf(w, "Errors: %d\n", totals.errCount)
+	_, _ = fmt.Fprintf(w, "Duration: %s\n", totals.duration.Round(time.Millisecond))
+	_, _ = fmt.Fprintf(w, "Input bytes: %d\n", totals.inputBytes)
+	_, _ = fmt.Fprintf(w, "Output bytes: %d\n", totals.outputBytes)
+	_, _ = fmt.Fprintf(w, "Peak CPU: %.1f%%\n", sys.CPUUsage)
+	_, _ = fmt.Fprintf(w, "Peak memory: %d bytes (%.1f%%)\n", sys.MemoryUsed, sys.MemoryPct)
+
+	if totals.errCount > 0 {
+		_, _ = fmt.Fprintln(w, "Failed files:")
+		for _, res := range results {
+			if res.Err != nil || res.Status == domain.StatusError {
+				_, _ = fmt.Fprintf(w, "- %s: %v\n", res.InputPath, res.Err)
+			}
+		}
+	}
 }
 
 func openDir(path string) error {
