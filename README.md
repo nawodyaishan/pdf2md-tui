@@ -43,11 +43,12 @@
 - **Chunking-safe tables** — positional text analysis detects column alignment and emits GFM pipe tables as indivisible atomic units, preventing downstream chunkers from destroying table integrity
 - **Two-path extraction** — positional extraction first (preserves structure); falls back to plain-text for edge cases
 - **Worker pool** — concurrent conversion using `runtime.NumCPU()` workers by default; configurable via `--workers`
-- **Live TUI** — animated spinner, progress bar, and a context-quality summary table on completion
-- **Interactive Menu** — run `pdf2md-tui` without arguments to launch a guided configuration wizard
+- **Live TUI** — Bubble Tea dashboard for batch conversion with live stats, recent activity, and a completion menu
+- **Interactive Menu** — run `pdf2md-tui` without arguments in a terminal to launch a guided configuration wizard
 - **Graceful OCR detection** — scanned/image-only PDFs are detected and skipped cleanly, reported in the summary (no empty output files)
 - **`--strip-noise`** — aggressively removes page numbers, repeated headers/footers, and excess whitespace for maximum token density
-- **Smart Overwrites** — interactively prompts before overwriting existing files, bypassed via `--force`
+- **Smart Overwrites** — prompts before overwrite in a terminal; non-interactive and `--quiet` runs fail unless `--force` is set
+- **Automation-friendly modes** — `--quiet` emits a JSON summary; non-TTY non-quiet runs fall back to a plain-text summary without alt-screen UI
 - **Date-stamped outputs** — `report_2026-05-06.md` so you always know which version was processed
 - **Single static binary** — no runtime dependencies; `CGO_ENABLED=0`, pure Go
 
@@ -80,11 +81,13 @@ Platforms: Linux, macOS, Windows × amd64 / arm64. Packages: `.tar.gz`, `.zip`, 
 
 ### Interactive Mode
 
-Simply run the tool without arguments to launch the guided interactive wizard. It will prompt you for directories, flags, and handle file overwrites smoothly:
+Run the tool without arguments in a terminal to launch the guided interactive wizard. It prompts for the target directory and common flags, and currently preselects `Extract images` in the multiselect:
 
 ```bash
 pdf2md-tui
 ```
+
+The zero-argument menu is only used when both stdin and stdout are interactive terminals. Otherwise the command defaults to converting the current directory.
 
 ### CLI Mode
 
@@ -100,6 +103,9 @@ pdf2md-tui convert ./papers --workers 8 --output out --date-format none --force
 
 # Extract embedded images and inject markdown links into the output
 pdf2md-tui convert ./docs --extract-images
+
+# CI-friendly mode: emit only JSON to stdout
+pdf2md-tui convert ./docs --quiet
 
 # Print version and build info
 pdf2md-tui version
@@ -159,7 +165,21 @@ func main() {
 | `--force` | `-f` | `false` | Overwrite existing output files without prompting |
 | `--strip-noise` | | `false` | Aggressively remove page numbers, headers/footers, and excess whitespace |
 | `--extract-images` | | `false` | Extract embedded images and inject markdown references |
+| `--quiet` | `-q` | `false` | Suppress the TUI and emit a JSON summary to stdout |
 | `--verbose` | `-v` | `false` | Print per-file errors to stderr |
+| `--log-file` | | `pdf2md.log` | Path for detailed conversion logs |
+
+### Runtime Modes
+
+- Interactive terminal: shows the pterm banner/discovery phase, then launches the Bubble Tea dashboard during conversion. When the batch completes, the dashboard offers `Open Output Directory`, `View Detailed Log` when failures occurred, and `Exit`.
+- Non-interactive without `--quiet`: skips the Bubble Tea alt-screen and prints a concise text summary after conversion finishes.
+- `--quiet`: prints only the JSON summary to stdout. If any conversions fail, the command still exits non-zero.
+
+### Overwrite and Log Behavior
+
+- Existing output files require confirmation only in an interactive terminal.
+- Non-interactive runs and `--quiet` refuse to overwrite existing outputs unless `--force` is set.
+- When failures occur, inspect the configured `--log-file` path for details. The completion menu exposes `View Detailed Log` in the dashboard, and non-interactive summaries print the log path directly.
 
 ### Output structure
 
@@ -199,7 +219,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed breakdown of the
 - [x] **⚡ Zero-Arg Usability** — Run `pdf2md-tui` in any folder with no arguments.
 - [x] **🏗️ Clean Architecture** — Decoupled domain/service/repository structure for scaling.
 - [ ] **🧱 Chunking-Safe Tables** — Atomic GFM pipe tables for hybrid vector chunkers.
-- [ ] **🔇 CI-Friendly Quiet Mode** — Non-interactive JSON output for automation.
+- [x] **🔇 CI-Friendly Quiet Mode** — Non-interactive JSON output for automation.
 - [ ] **🔌 MCP Server Wrapper** — Native tool support for Model Context Protocol agents.
 - [ ] **☁️ VLM Cloud Integration** — High-accuracy Markdown generation via GPT-4o/Claude.
 
