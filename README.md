@@ -220,6 +220,36 @@ make check          # fmt + vet + lint + test
 make help           # list all targets
 ```
 
+### Git hooks
+
+This repository uses [Lefthook](https://lefthook.dev/) as a Go-friendly alternative to Husky.
+
+The hook split follows the usual Go workflow:
+
+- `pre-commit`: format staged Go files with `gofmt -w` and run `go vet ./...`
+- `pre-push`: run `golangci-lint run ./...`, `go test -race ./...`, and `go build ./cmd/pdf2md-tui`
+
+Install Lefthook and wire the hooks into `.git/hooks`:
+
+```bash
+brew install lefthook
+make hooks-install
+```
+
+Official Go-based install is also supported:
+
+```bash
+go install github.com/evilmartians/lefthook/v2@v2.1.6
+make hooks-install
+```
+
+You can also run the hook suites manually:
+
+```bash
+make hooks-run-pre-commit
+make hooks-run-pre-push
+```
+
 ---
 
 ## Roadmap

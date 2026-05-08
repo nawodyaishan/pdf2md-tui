@@ -1,0 +1,23 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: gofmt
+      glob: "*.go"
+      run: gofmt -w {staged_files}
+      stage_fixed: true
+
+    - name: go-vet
+      glob: "*.go"
+      run: go vet ./...
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: golangci-lint
+      run: golangci-lint run ./...
+
+    - name: go-test-race
+      run: go test -race ./...
+
+    - name: go-build
+      run: go build ./cmd/pdf2md-tui

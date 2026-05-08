@@ -1,4 +1,5 @@
-.PHONY: build test lint fmt vet tidy snapshot cover run clean release tag help
+.PHONY: build test lint fmt vet tidy snapshot cover run clean release tag help \
+	check hooks-install hooks-run-pre-commit hooks-run-pre-push hooks-validate
 
 APP_NAME    := pdf2md-tui
 BIN_DIR     := bin
@@ -50,6 +51,34 @@ tidy: ## Tidy go.mod and go.sum
 	go mod tidy
 
 check: fmt vet lint test ## Run all quality checks (fmt, vet, lint, test)
+
+hooks-install: ## Install Git hooks via Lefthook
+	@command -v lefthook >/dev/null 2>&1 || { \
+		echo "ERROR: lefthook is required. Install it with 'brew install lefthook' or 'go install github.com/evilmartians/lefthook/v2@v2.1.6'."; \
+		exit 1; \
+	}
+	lefthook install
+
+hooks-run-pre-commit: ## Run the configured pre-commit hook locally
+	@command -v lefthook >/dev/null 2>&1 || { \
+		echo "ERROR: lefthook is required. Install it with 'brew install lefthook' or 'go install github.com/evilmartians/lefthook/v2@v2.1.6'."; \
+		exit 1; \
+	}
+	lefthook run pre-commit
+
+hooks-run-pre-push: ## Run the configured pre-push hook locally
+	@command -v lefthook >/dev/null 2>&1 || { \
+		echo "ERROR: lefthook is required. Install it with 'brew install lefthook' or 'go install github.com/evilmartians/lefthook/v2@v2.1.6'."; \
+		exit 1; \
+	}
+	lefthook run pre-push
+
+hooks-validate: ## Validate lefthook.yml
+	@command -v lefthook >/dev/null 2>&1 || { \
+		echo "ERROR: lefthook is required. Install it with 'brew install lefthook' or 'go install github.com/evilmartians/lefthook/v2@v2.1.6'."; \
+		exit 1; \
+	}
+	lefthook validate
 
 # ── Release ────────────────────────────────────────────────────────────────────
 
