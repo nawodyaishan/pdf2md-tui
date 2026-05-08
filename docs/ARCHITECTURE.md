@@ -31,7 +31,7 @@ pdf2md-tui/
 │   │       └── discovery.go
 │   └── handler/           # External Interfaces / Presentation
 │       ├── cli/           # Cobra command definitions
-│       └── tui/           # pterm: progress bar, menu, summary table
+│       └── tui/           # pterm prompts + Bubble Tea conversion dashboard
 ├── pkg/
 │   └── version/           # Build-time version variables
 ├── scripts/               # CI/CD and automation scripts
@@ -72,8 +72,9 @@ pdf2md-tui convert <dir> [flags]
         │
         ▼
 ┌──────────────────────────────────────┐
-│  internal/handler/tui/progress.go    │
-│  Update UI based on domain.Result    │
+│  internal/handler/tui/model.go       │
+│  Bubble Tea dashboard receives       │
+│  StatusUpdateMsg / SysInfoMsg        │
 └──────────────────────────────────────┘
 ```
 
@@ -183,18 +184,21 @@ GoReleaser performs the same injection using `{{.Version}}`, `{{.ShortCommit}}`,
 
 ## TUI Design
 
-`internal/tui` wraps `github.com/pterm/pterm` and exposes four lifecycle calls:
+The presentation layer is intentionally split between `pterm` and Bubble Tea:
 
-| Method | Phase | Output |
-|--------|-------|--------|
-| `PrintBanner()` | Startup | Branded header with version |
-| `StartDiscovery()` / `StopDiscovery(n)` | Scanning | Animated spinner → "Found N PDFs" |
-| `StartConversion(n)` / `Increment()` / `StopConversion()` | Converting | Progress bar |
-| `PrintSummary(in, out, dur, errs)` | Complete | Table with sizes, durations, token savings |
+| Layer | Files | Responsibility |
+|------|-------|----------------|
+| Startup / prompts | `internal/handler/tui/progress.go`, `menu.go` | Banner, discovery spinner, overwrite confirmation, legacy summary helpers |
+| Live conversion dashboard | `internal/handler/tui/model.go`, `dashboard_render.go` | Bubble Tea alt-screen with batch progress, system stats, recent activity, and completion actions |
+| Orchestration | `internal/handler/cli/convert.go` | Decides whether to run the dashboard, plain-text summary mode, or `--quiet` JSON mode |
 
-Token savings are estimated as `(inputBytes - outputBytes) / inputBytes × 100` — displayed as a percentage reduction.
+Runtime behavior:
 
-When stdout is not a TTY, pterm auto-disables animations. The `--quiet` flag (planned) will suppress all TUI output for CI use, emitting only a JSON summary to stdout.
+- Interactive terminal + non-quiet: pterm banner/discovery, then Bubble Tea dashboard via `tea.NewProgram(..., tea.WithAltScreen())`
+- Non-interactive + non-quiet: no alt-screen dashboard; the CLI waits for workers and prints a concise text summary
+- `--quiet`: no TUI output; the CLI emits a `domain.Summary` JSON document to stdout and still returns a non-zero exit code on conversion errors
+
+The Bubble Tea model owns UI state only. Post-completion side effects such as opening the output directory or surfacing the log path are handled in `internal/handler/cli/convert.go` after `prog.Run()` returns.
 
 ---
 

@@ -54,3 +54,4 @@ testdata/
 .env.local
 *.pem
 *.key
+pdf2md.log

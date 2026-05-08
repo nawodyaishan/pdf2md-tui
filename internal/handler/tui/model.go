@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -24,14 +25,28 @@ type BatchCompleteMsg struct {
 	Results []domain.Result
 }
 
+type CompletionAction string
+
+const (
+	CompletionActionNone    CompletionAction = ""
+	CompletionActionOpenDir CompletionAction = "open_dir"
+	CompletionActionViewLog CompletionAction = "view_log"
+	CompletionActionExit    CompletionAction = "exit"
+)
+
+type completionMenuItem struct {
+	Label  string
+	Action CompletionAction
+}
+
 // Model represents the TUI state
 type Model struct {
 	// State
-	TotalFiles   int
-	CurrentFile  int
-	WorkerCount  int
-	Results      []domain.Result
-	SysInfo      domain.SysInfo
+	TotalFiles    int
+	CurrentFile   int
+	WorkerCount   int
+	Results       []domain.Result
+	SysInfo       domain.SysInfo
 	StartTime     time.Time
 	FinalDuration time.Duration
 	Complete      bool
@@ -50,6 +65,7 @@ type Model struct {
 
 	// Menu
 	SelectedMenuIndex int
+	CompletionAction  CompletionAction
 }
 
 func NewModel(total, workers int) Model {
@@ -81,25 +97,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.Complete {
+			menuItems := m.completionMenuItems()
 			switch msg.String() {
 			case "up", "k":
 				if m.SelectedMenuIndex > 0 {
 					m.SelectedMenuIndex--
 				}
 			case "down", "j":
-				if m.SelectedMenuIndex < 1 {
+				if m.SelectedMenuIndex < len(menuItems)-1 {
 					m.SelectedMenuIndex++
 				}
 			case "enter", " ":
+				if len(menuItems) > 0 && m.SelectedMenuIndex >= 0 && m.SelectedMenuIndex < len(menuItems) {
+					m.CompletionAction = menuItems[m.SelectedMenuIndex].Action
+				}
 				return m, tea.Quit
 			case "q", "ctrl+c":
+				m.CompletionAction = CompletionActionExit
 				return m, tea.Quit
 			}
 			return m, nil
 		}
-		if msg.String() == "q" || msg.String() == "ctrl+c" {
-			return m, tea.Quit
-		}
+		return m, nil
 
 	case spinner.TickMsg:
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -115,7 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SysInfoMsg:
 		if !m.Complete {
 			m.SysInfo = msg.Info
-			
+
 			// Update Peaks
 			if msg.Info.CPUUsage > m.PeakCPU {
 				m.PeakCPU = msg.Info.CPUUsage
@@ -126,7 +145,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Info.MemoryPct > m.MaxMemPct {
 				m.MaxMemPct = msg.Info.MemoryPct
 			}
-			
+
 			// Accumulate for average
 			m.AvgCPU += msg.Info.CPUUsage
 			m.sysCount++
@@ -143,6 +162,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) completionMenuItems() []completionMenuItem {
+	items := []completionMenuItem{
+		{Label: "Open Output Directory", Action: CompletionActionOpenDir},
+	}
+
+	if m.hasFailures() {
+		items = append(items, completionMenuItem{
+			Label:  "View Detailed Log",
+			Action: CompletionActionViewLog,
+		})
+	}
+
+	items = append(items, completionMenuItem{
+		Label:  "Exit",
+		Action: CompletionActionExit,
+	})
+
+	return items
+}
+
+func (m Model) hasFailures() bool {
+	for _, res := range m.Results {
+		if res.Err != nil || res.Status == domain.StatusError {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) View() string {
@@ -162,24 +210,49 @@ func (m Model) View() string {
 }
 
 func (m Model) renderHeader() string {
-	title := TitleStyle.Render(" PDF2MD-TUI ")
-	status := " Processing..."
+	title := TitleStyle.Render(" PDF2MD ")
+	status := StatusActiveStyle.Render("LIVE")
 	if m.Complete {
-		status = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true).Render(" SUCCESS ")
+		status = StatusSuccessStyle.Render("COMPLETE")
 	}
-	
+
+	meta := fmt.Sprintf("%d/%d files • %d workers", m.CurrentFile, m.TotalFiles, m.WorkerCount)
+	if m.Complete {
+		meta = fmt.Sprintf("%d files processed • %.2fs", len(m.Results), m.FinalDuration.Seconds())
+	}
+
+	content := lipgloss.JoinHorizontal(lipgloss.Center,
+		title,
+		" ",
+		status,
+		"  ",
+		SubtleTextStyle.Render(meta),
+	)
+
 	return HeaderStyle.Width(m.width).Render(
-		lipgloss.JoinHorizontal(lipgloss.Center, title, " ", status),
+		content,
 	)
 }
 
 func (m Model) renderFooter() string {
 	if m.Complete {
-		msg := " CONVERSION COMPLETE • PRESS ANY KEY FOR SUMMARY "
+		msg := lipgloss.JoinHorizontal(lipgloss.Left,
+			KeyHintStyle.Render("enter"),
+			" ",
+			KeyHintMutedStyle.Render("select"),
+			"  ",
+			KeyHintStyle.Render("q"),
+			" ",
+			KeyHintMutedStyle.Render("exit"),
+		)
 		return FooterStyle.Width(m.width).Render(
 			SuccessFooterStyle.Render(msg),
 		)
 	}
-	return FooterStyle.Width(m.width).Render(" [q] Quit • [l] Logs • [o] Open Output ")
+	msg := lipgloss.JoinHorizontal(lipgloss.Left,
+		StatusMutedStyle.Render("RUNNING"),
+		"  ",
+		SubtleTextStyle.Render("live conversion dashboard • completion actions unlock when the batch finishes"),
+	)
+	return FooterStyle.Width(m.width).Render(msg)
 }
-

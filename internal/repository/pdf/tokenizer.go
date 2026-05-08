@@ -1,8 +1,8 @@
 package pdf
 
 import (
-	"github.com/pkoukk/tiktoken-go"
 	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/pkoukk/tiktoken-go"
 )
 
 type TiktokenTokenizer struct {

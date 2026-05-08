@@ -6,9 +6,13 @@ import (
 	"github.com/pterm/pterm"
 )
 
-// IsInteractive reports whether stdin is an interactive terminal.
+// IsInteractive reports whether both stdin and stdout are interactive terminals.
 func IsInteractive() bool {
-	fi, err := os.Stdin.Stat()
+	return isTerminal(os.Stdin) && isTerminal(os.Stdout)
+}
+
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
 	if err != nil {
 		return false
 	}
