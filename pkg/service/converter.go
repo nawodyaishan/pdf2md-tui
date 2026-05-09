@@ -153,9 +153,13 @@ func applyLLMOptimizations(text string) string {
 	rePageNums := regexp.MustCompile(`(?m)^\s*\d+\s*$`)
 	text = rePageNums.ReplaceAllString(text, "")
 
-	// Collapse multiple spaces and newlines into a single space
-	reSpaces := regexp.MustCompile(`\s+`)
-	text = reSpaces.ReplaceAllString(text, " ")
+	// Collapse horizontal whitespace (spaces, tabs) but preserve newlines
+	reHorizontalSpaces := regexp.MustCompile(`[^\S\r\n]+`)
+	text = reHorizontalSpaces.ReplaceAllString(text, " ")
+
+	// Normalize multiple newlines to exactly \n\n for structural preservation (G2)
+	reVerticalSpaces := regexp.MustCompile(`\n{3,}`)
+	text = reVerticalSpaces.ReplaceAllString(text, "\n\n")
 
 	return strings.TrimSpace(text)
 }

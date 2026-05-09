@@ -16,14 +16,14 @@ func TestApplyLLMOptimizations(t *testing.T) {
 		want string
 	}{
 		{
-			name: "collapse spaces",
+			name: "collapse spaces but keep paragraphs",
 			in:   "Hello     World\n\n\nTesting",
-			want: "Hello World Testing",
+			want: "Hello World\n\nTesting",
 		},
 		{
 			name: "remove isolated numbers (page numbers)",
 			in:   "Hello World\n12\nNext Page",
-			want: "Hello World Next Page",
+			want: "Hello World\n\nNext Page",
 		},
 	}
 

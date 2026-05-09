@@ -610,6 +610,7 @@ func TestExtractColumnClusters_GroupsCloseCoordinates(t *testing.T) {
 
 func TestCoalesceChars_StackedCoordinates(t *testing.T) {
 	// Fake bold where the exact same character is printed with a tiny offset
+	// We no longer deduplicate aggressively to avoid collapsing legitimate double letters.
 	texts := []ledongpdf.Text{
 		{S: "A", X: 10.0, Y: 100, FontSize: 12, W: 7},
 		{S: "A", X: 10.1, Y: 100, FontSize: 12, W: 7},
@@ -619,7 +620,68 @@ func TestCoalesceChars_StackedCoordinates(t *testing.T) {
 	if len(result) != 1 {
 		t.Fatalf("expected 1 word, got %d", len(result))
 	}
-	if result[0].text != "AB" {
-		t.Errorf("expected 'AB', got %q", result[0].text)
+	// Since deduplication is disabled, we expect "AAB"
+	if result[0].text != "AAB" {
+		t.Errorf("expected 'AAB', got %q", result[0].text)
+	}
+}
+
+func TestCoalesceChars_DoubleLetters(t *testing.T) {
+	// Legitimate double letters (e.g., 'ww' in www)
+	// These are adjacent but NOT stacked. Overlap should be near zero.
+	// w1: (10, 100, W=10) -> rightEdge=20
+	// w2: (20, 100, W=10) -> rightEdge=30
+	texts := []ledongpdf.Text{
+		{S: "w", X: 10.0, Y: 100, FontSize: 12, W: 10},
+		{S: "w", X: 20.0, Y: 100, FontSize: 12, W: 10},
+		{S: "w", X: 30.0, Y: 100, FontSize: 12, W: 10},
+	}
+	result := coalesceChars(texts)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 word, got %d", len(result))
+	}
+	if result[0].text != "www" {
+		t.Errorf("expected 'www', got %q", result[0].text)
+	}
+}
+
+func TestCoalesceChars_SpacedHeading(t *testing.T) {
+	// Spaced heading: "T E S T" with consistent wide gaps
+	// medianW=7, gap=5. charSpaceThreshold is usually 0.2*medianW=1.4
+	// wordSpaceThreshold is 0.8*medianW=5.6
+	// In a normal line, 5pt gap would be a space.
+	// In a spaced heading line (low stddev), it should coalesce without spaces.
+	texts := []ledongpdf.Text{
+		{S: "T", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "E", X: 22, Y: 100, FontSize: 12, W: 7}, // gap=5
+		{S: "S", X: 34, Y: 100, FontSize: 12, W: 7}, // gap=5
+		{S: "T", X: 46, Y: 100, FontSize: 12, W: 7}, // gap=5
+	}
+	result := coalesceChars(texts)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 word, got %d", len(result))
+	}
+	if result[0].text != "TEST" {
+		t.Errorf("expected 'TEST', got %q", result[0].text)
+	}
+}
+
+func TestSanitizeText_Ligatures(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"fi ligature", "ﬁ", "fi"},
+		{"fl ligature", "ﬂ", "fl"},
+		{"combined", "Brieﬁng", "Briefing"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeText(tt.in)
+			if got != tt.want {
+				t.Errorf("sanitizeText(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }

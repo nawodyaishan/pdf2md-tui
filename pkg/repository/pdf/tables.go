@@ -130,19 +130,46 @@ func processLineIntoWords(line []indexedText) []word {
 		return nil
 	}
 
-	// Calculate median width (W) for adaptive spacing.
+	// Calculate line-level statistics for adaptive thresholds.
 	var widths []float64
-	for _, t := range line {
+	var gaps []float64
+	var lastRight float64
+	for i, t := range line {
 		w := t.W
 		if w <= 0 {
 			w = t.FontSize * charDefaultWidthRatio
 		}
 		widths = append(widths, w)
+		if i > 0 {
+			gap := t.X - lastRight
+			if gap > 0 {
+				gaps = append(gaps, gap)
+			}
+		}
+		lastRight = t.X + w
 	}
 	medianW := calculateMedian(widths)
+	medianGap := calculateMedian(gaps)
+	stdDevGap := calculateStdDev(gaps)
+
+	// Heuristic: If gaps are consistent (low relative stddev) but wide (high median),
+	// it's likely a spaced heading. We increase the word boundary threshold.
+	// Spaced headings often have gaps nearly as large as the character widths themselves.
+	relStdDev := 0.0
+	if medianGap > 0 {
+		relStdDev = stdDevGap / medianGap
+	}
+	isSpacedHeading := len(gaps) > 1 && relStdDev < 0.8 && medianGap > (medianW*charSpaceRatio)
 
 	charSpaceThreshold := medianW * charSpaceRatio
 	wordSpaceThreshold := medianW * wordSpaceRatio
+
+	if isSpacedHeading {
+		// Increase thresholds to prevent splitting intentional letter-spacing
+		// Use a threshold relative to the detected median gap
+		charSpaceThreshold = math.Max(charSpaceThreshold, medianGap+5.0)
+		wordSpaceThreshold = math.Max(wordSpaceThreshold, medianGap*3.0)
+	}
 
 	var words []word
 	var currentWord word
@@ -150,13 +177,7 @@ func processLineIntoWords(line []indexedText) []word {
 	started := false
 
 	var lastIndex int
-	for i, t := range line {
-		// Deduplication: skip if identical to previous char at nearly identical position
-		// This handles "fake bold" double-printing where the same char is offset slightly.
-		if i > 0 && t.S == line[i-1].S && math.Abs(t.X-line[i-1].X) < doublePrintXOffset && math.Abs(t.Y-line[i-1].Y) < doublePrintYOffset {
-			continue
-		}
-
+	for _, t := range line {
 		s := t.S
 		if s == "" || t.FontSize <= 0 {
 			continue
@@ -175,6 +196,11 @@ func processLineIntoWords(line []indexedText) []word {
 			started = true
 			continue
 		}
+
+		// Deduplication (Geometric Fix)
+		// We avoid aggressive deduplication because it often collapses legitimate 
+		// double letters in low-quality or uniquely encoded PDFs.
+		// Modern PDF libraries like ledongthuc/pdf often handle basic deduplication.
 
 		gap := t.X - (lastX + lastW)
 		isSequential := t.index == lastIndex+1
@@ -206,6 +232,36 @@ func processLineIntoWords(line []indexedText) []word {
 		words = append(words, currentWord)
 	}
 	return words
+}
+
+func calculateOverlap(x1, w1, x2, w2 float64) float64 {
+	// Intersection over Union (IoU) simplified for 1D
+	end1 := x1 + w1
+	end2 := x2 + w2
+	intersectStart := math.Max(x1, x2)
+	intersectEnd := math.Min(end1, end2)
+	intersection := math.Max(0, intersectEnd-intersectStart)
+	if intersection == 0 {
+		return 0
+	}
+	union := math.Max(end1, end2) - math.Min(x1, x2)
+	return intersection / union
+}
+
+func calculateStdDev(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	mean := sum / float64(len(values))
+	var sqSum float64
+	for _, v := range values {
+		sqSum += math.Pow(v-mean, 2)
+	}
+	return math.Sqrt(sqSum / float64(len(values)))
 }
 
 func sortLineByX(line []indexedText) {
@@ -240,7 +296,7 @@ func sanitizeText(s string) string {
 		"ﬄ", "ffl",
 		"ﬆ", "st",
 		"ﬅ", "ft",
-		"", "", // Generic replacement char
+		"\ufffd", "", // Generic replacement char
 		"\u0000", "", // Null
 		"\uFEFF", "", // BOM
 	)
