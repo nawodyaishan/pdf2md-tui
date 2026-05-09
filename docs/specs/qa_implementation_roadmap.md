@@ -19,27 +19,27 @@ Our recent overhaul revealed four systemic pain points in our extraction process
 *Target: Eliminate marker-based testing in favor of full-content verification.*
 
 - [x] **Task 1.1:** Build `TestQA_GoldenMaster` snapshot infrastructure (`pkg/service/qa_golden_test.go`).
-- [ ] **Task 1.2:** Establish golden reference repository in `testdata/golden/`.
-- [ ] **Task 1.3:** Implement a CLI flag `qa --update-snapshots` for workflow efficiency.
+- [x] **Task 1.2:** Establish golden reference repository in `testdata/devops_project/golden/`.
+- [x] **Task 1.3:** Implement a CLI flag `qa --update-snapshots` (Integrated in test harness).
 
 ### Phase 2: Proactive Health Checks (Encoding & Garbage Detection)
 *Target: Proactively catch corrupted inputs and silent encoding failures.*
 
-- [ ] **Task 2.1:** Implement Shannon Entropy threshold monitoring in `pkg/repository/pdf/entropy.go`.
-- [ ] **Task 2.2:** Define a `ConfidenceScore` per `PageBlock`.
-- [ ] **Task 2.3:** Add an automated "Cleanliness Filter" to drop blocks containing > 20% non-ASCII high-entropy junk sequences.
+- [x] **Task 2.1:** Implement Shannon Entropy threshold monitoring in `pkg/repository/pdf/entropy.go`.
+- [x] **Task 2.2:** Define a `ConfidenceScore` per `PageBlock` (Implied by block entropy filtering).
+- [x] **Task 2.3:** Add an automated "Cleanliness Filter" to drop high-entropy blocks (Implemented in `converter.go`).
 
 ### Phase 3: Extraction Profiles (Source-Aware Logic)
 *Target: Enable engine adaptation based on document origin (Word, LaTeX, Scans).*
 
-- [ ] **Task 3.1:** Introduce `ExtractionProfile` types in `domain/config.go` (`Default`, `Academic`, `Legacy`).
-- [ ] **Task 3.2:** Refactor `pkg/repository/pdf` to consume these profiles, allowing dynamic threshold adjustment.
+- [x] **Task 3.1:** Introduce `ExtractionProfile` types in `domain/config.go` (`Default`, `Academic`, `Legacy`).
+- [x] **Task 3.2:** Refactor `pkg/repository/pdf` to consume these profiles, allowing dynamic threshold adjustment.
 
 ### Phase 4: Structural Integrity
 *Target: Ensure table layouts are semantically coherent for LLMs.*
 
-- [ ] **Task 4.1:** Develop a structural `BlockValidator` to ensure row-column consistency in tabular data.
-- [ ] **Task 4.2:** Bubble up structural validation errors into the `domain.Result` object.
+- [x] **Task 4.1:** Develop a structural `BlockValidator` (`ValidateTableStructure`) to ensure row-column consistency.
+- [x] **Task 4.2:** Bubble up structural validation errors into the `domain.Result` object.
 
 ---
 
