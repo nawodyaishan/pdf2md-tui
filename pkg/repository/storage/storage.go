@@ -3,7 +3,7 @@ package storage
 import (
 	"os"
 
-	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
 type diskStorage struct{}
