@@ -1,0 +1,506 @@
+# QA Phase 4 — Advanced Coverage & Interactive Testing
+
+**Status**: Planning  
+**Target Coverage**: 70%+ (from current 51.7%)  
+**Gap Closing**: 18.3 percentage points  
+**Est. Effort**: High (complex TUI/interactive testing)
+
+---
+
+## Executive Summary
+
+Phase 3 achieved 51.7% coverage by testing core business logic (extraction, parsing, conversion, storage) with 60 passing tests, comprehensive benchmarks, and CI/CD gates. Phase 4 closes the remaining 18.3% gap by introducing specialized testing for interactive features and entry points that are currently untested but difficult to validate without full TUI framework support.
+
+**Critical Gap Analysis:**
+- **Interactive CLI** (23.5% coverage loss): Menu prompts, terminal I/O, Bubble Tea dashboard rendering
+- **TUI Rendering** (76.9% loss): Progress bars, completion views, live stats updates
+- **Entry Points** (0% coverage): cmd/ packages (technically covered by E2E but not counted)
+
+---
+
+## Phase 4 Goals
+
+1. **Reach 70%+ coverage** by testing untestable-in-phase-3 components
+2. **Add specialized test frameworks** for TUI and interactive CLI
+3. **Implement snapshot/golden tests** for rendering consistency
+4. **Document trade-offs** between test cost and coverage ROI
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 3 (Core Logic) → 51.7% Coverage ✅                    │
+├─────────────────────────────────────────────────────────────┤
+│ • pkg/domain (100%), pkg/repository (73-91%)               │
+│ • pkg/service (79.8%), core extraction/conversion logic    │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Phase 4 (Interactive Layers) → 70%+ Coverage Target       │
+├─────────────────────────────────────────────────────────────┤
+│ 4.1: Entry Point Tests (cmd/)                             │
+│ 4.2: TUI Component Tests (internal/handler/tui)           │
+│ 4.3: Interactive Menu Tests (internal/handler/tui/menu)   │
+│ 4.4: CLI Command Path Tests (internal/handler/cli)        │
+│ 4.5: Integration Snapshot Tests                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Phase 4.1 — Entry Point Tests (cmd/)
+
+**Goal**: Cover main() functions and entry point logic  
+**Current Coverage**: 0%  
+**Target**: 100%  
+**Effort**: Low
+
+### 4.1.1 Command Entry Points
+
+Create `cmd/pdf2md-tui/main_test.go`:
+
+```go
+package main
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMainExitsCleanlyWithValidInput(t *testing.T) {
+	// Use os/exec to test main() directly
+	// Set up test environment with valid PDF
+	// Verify exit code 0
+}
+
+func TestMainExitsNonZeroOnError(t *testing.T) {
+	// Trigger CLI error (invalid args)
+	// Verify exit code 1
+}
+```
+
+**Why it matters**: Validates the entry point contract (os.Exit behavior, error handling at process boundary).
+
+### 4.1.2 Debug Utility
+
+Create `cmd/debug-pdf/main_test.go`:
+
+```go
+package main
+
+import (
+	"os"
+	"testing"
+)
+
+func TestDebugPdfHelp(t *testing.T) {
+	// Verify usage message
+}
+
+func TestDebugPdfValidPDF(t *testing.T) {
+	// Test with sample PDF in testdata
+}
+```
+
+**Coverage impact**: +2-3% (cmd packages are small)
+
+---
+
+## Phase 4.2 — TUI Rendering Tests (internal/handler/tui)
+
+**Goal**: Test Bubble Tea dashboard rendering  
+**Current Coverage**: 23.1%  
+**Target**: 60%+  
+**Effort**: High (requires snapshot testing or view output comparison)
+
+### 4.2.1 Snapshot/Golden Tests
+
+Create `internal/handler/tui/dashboard_render_golden_test.go`:
+
+```go
+package tui
+
+import (
+	"testing"
+
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+)
+
+func TestRenderDashboard_GoldenSnapshot(t *testing.T) {
+	model := NewModel()
+	model.results = []domain.Result{
+		{InputPath: "test.pdf", Status: domain.StatusOK},
+	}
+	
+	view := model.View()
+	
+	// Compare against golden file
+	// testdata/golden/dashboard_view.txt
+	if err := compareGolden(t, view); err != nil {
+		t.Errorf("rendering mismatch: %v", err)
+	}
+}
+
+func TestRenderStats_StatsFormat(t *testing.T) {
+	// Test the stats section rendering
+	// Verify ANSI codes, alignment
+}
+
+func TestRenderProgressBar_AnimationFrames(t *testing.T) {
+	// Test progress bar at 0%, 50%, 100%
+}
+```
+
+**Files to create:**
+- `internal/handler/tui/golden_test.go` - helper for snapshot testing
+- `internal/handler/tui/testdata/golden/*.txt` - golden reference files
+
+**Approach**: Store rendered output as golden files, compare on each test. Update golden files when intentional visual changes occur.
+
+### 4.2.2 View Model Tests
+
+Create `internal/handler/tui/view_test.go`:
+
+```go
+func TestViewHeaderFormat(t *testing.T) {
+	// Test renderHeader() output format
+}
+
+func TestViewFooterCommands(t *testing.T) {
+	// Test renderFooter() displays correct exit options
+}
+
+func TestCompletionViewMenu(t *testing.T) {
+	// Test menu items at completion state
+}
+```
+
+**Coverage impact**: +15-20% (TUI has ~200 LOC in rendering functions)
+
+---
+
+## Phase 4.3 — Interactive Menu Tests (internal/handler/tui/menu)
+
+**Goal**: Test terminal interaction functions  
+**Current Coverage**: 0%  
+**Target**: 50%+  
+**Effort**: Very High (requires PTY simulation or term.js mock)
+
+### 4.3.1 Terminal Input Mocking
+
+Create `internal/handler/tui/menu_test.go`:
+
+```go
+package tui
+
+import (
+	"bytes"
+	"os"
+	"testing"
+)
+
+type mockTerminal struct {
+	input  string
+	output *bytes.Buffer
+}
+
+func TestShowMainMenuPrintsOptions(t *testing.T) {
+	menu := &mockTerminal{
+		input:  "1\n", // Select option 1
+		output: &bytes.Buffer{},
+	}
+	
+	// Capture output
+	// Verify menu options printed
+	// Verify selection processed
+}
+
+func TestPromptConvertConfigCapturesToml(t *testing.T) {
+	// Mock stdin with user responses
+	// Verify config struct populated
+}
+
+func TestConfirmOverwriteRespectsYesNo(t *testing.T) {
+	menu := &mockTerminal{input: "y\n"}
+	ok, err := menu.ConfirmOverwrite([]string{"file.md"})
+	if !ok || err != nil {
+		t.Fatal("expected user confirmation")
+	}
+}
+```
+
+**Challenges:**
+- Terminal libraries (pterm, Bubble Tea) are event-driven, hard to test directly
+- **Solution**: Create thin wrapper layer (`internal/handler/tui/terminal_adapter.go`) that abstracts I/O for testability
+
+**New file**: `internal/handler/tui/terminal_adapter.go`
+
+```go
+package tui
+
+// TerminalAdapter abstracts stdin/stdout for testing
+type TerminalAdapter interface {
+	ReadLine() (string, error)
+	WriteLine(s string) error
+}
+
+// RealTerminal wraps os.Stdin/Stdout
+type RealTerminal struct {}
+
+// MockTerminal for testing
+type MockTerminal struct {
+	lines []string
+	idx   int
+}
+```
+
+**Coverage impact**: +10-15% (menu functions ~150 LOC)
+
+---
+
+## Phase 4.4 — CLI Command Path Tests (internal/handler/cli)
+
+**Goal**: Increase CLI coverage from 59% → 75%+  
+**Current Coverage**: 59%  
+**Target**: 75%+  
+**Effort**: Medium
+
+### 4.4.1 Non-Interactive Mode Tests
+
+Create `internal/handler/cli/cli_modes_test.go`:
+
+```go
+func TestTextSummaryOutputFormat(t *testing.T) {
+	// printTextSummary() - currently 0% coverage
+	// Mock stdout, verify formatting
+}
+
+func TestOpenDirectoryCommand(t *testing.T) {
+	// openDir() - currently 0% coverage
+	// Mock exec.Command, verify dir open invoked
+}
+
+func TestClearTerminalANSICodes(t *testing.T) {
+	// clearTerminal() - currently 0% coverage
+	// Verify ANSI escape codes emitted
+}
+
+func TestAnyFlagChangedDetection(t *testing.T) {
+	// anyFlagChanged() - currently 0% coverage
+	// Test flag comparison logic
+}
+
+func TestRunInteractiveMenuFlow(t *testing.T) {
+	// runInteractiveMenu() - currently 0% coverage
+	// Mock user selections, verify config applied
+}
+```
+
+**Files needed:**
+- Mock exec.Command for openDir()
+- Mock terminal for clearTerminal()
+- Flag state comparison fixtures for anyFlagChanged()
+
+**Coverage impact**: +10-15%
+
+---
+
+## Phase 4.5 — Integration Snapshot Tests
+
+**Goal**: Test end-to-end output consistency  
+**Current Coverage**: Covered by E2E tests  
+**Target**: Add visual/output regression detection
+
+### 4.5.1 Output Snapshots
+
+Create `internal/handler/cli/output_snapshot_test.go`:
+
+```go
+func TestConvertJSONOutputSchema(t *testing.T) {
+	// Run convert with --quiet
+	// Parse JSON output
+	// Compare against golden schema
+	// Ensures JSON format doesn't regress
+}
+
+func TestMarkdownOutputConsistency(t *testing.T) {
+	// Convert same PDF twice
+	// Compare byte-for-byte output
+	// Ensures deterministic conversion
+}
+```
+
+**Tooling**:
+- `testscript` already provides baseline E2E
+- Add `github.com/cuonglm/gofail` for fault injection testing (optional)
+
+---
+
+## Phase 4 Implementation Roadmap
+
+| Task | Files | LOC | Effort | Coverage Impact |
+|------|-------|-----|--------|-----------------|
+| 4.1: Entry points | cmd/*_test.go | 100 | Low | +2-3% |
+| 4.2: TUI rendering | tui/*_golden_test.go, testdata/golden/ | 300 | High | +15-20% |
+| 4.3: Menu I/O | tui/menu_test.go, terminal_adapter.go | 200 | Very High | +10-15% |
+| 4.4: CLI paths | cli/cli_modes_test.go | 150 | Medium | +10-15% |
+| 4.5: Snapshot tests | cli/output_snapshot_test.go | 100 | Low | +2-3% |
+| **Total** | | **850** | | **~50-70%** |
+
+---
+
+## Effort Estimation & ROI
+
+### Time Investment by Component
+
+| Phase | Hours | Coverage Gain | ROI (% per hour) |
+|-------|-------|---------------|-----------------|
+| Phase 1 | 4 | 0% → 47% | 11.75% |
+| Phase 2 | 6 | 47% → 49% | 0.33% |
+| Phase 3 | 12 | 49% → 51.7% | 0.23% |
+| Phase 4 | ~20-24 | 51.7% → 70% | 0.88% |
+
+**Key insight**: Phase 4 faces diminishing returns. Core logic is well-tested; remaining gap is interactive/UI code which is:
+- Hard to unit test (requires mocks, snapshots, PTY simulation)
+- Often refactored for UX (golden files become stale)
+- Lower business priority (users care about PDF conversion quality, not menu rendering)
+
+---
+
+## Recommendation: Phased Approach
+
+### Phase 4A (Fast) — 6 hours → 57% coverage
+- **4.1**: Entry point tests (trivial)
+- **4.4**: CLI non-interactive paths (straightforward mocking)
+- **4.5**: Snapshot tests (testscript-based)
+
+**ROI**: High. Entry and non-interactive paths are stable.
+
+### Phase 4B (Slow) — 15+ hours → 70% coverage
+- **4.2**: TUI rendering snapshots (needs golden file maintenance)
+- **4.3**: Menu I/O testing (complex PTY mocking, fragile)
+
+**ROI**: Lower. UX code changes frequently; snapshot maintenance becomes burden.
+
+---
+
+## Critical Files (Phase 4)
+
+| File | Action | Est. LOC | Complexity |
+|------|--------|---------|------------|
+| cmd/pdf2md-tui/main_test.go | CREATE | 50 | Low |
+| cmd/debug-pdf/main_test.go | CREATE | 50 | Low |
+| internal/handler/tui/terminal_adapter.go | CREATE | 100 | Medium |
+| internal/handler/tui/menu_test.go | CREATE | 150 | High |
+| internal/handler/tui/dashboard_render_golden_test.go | CREATE | 150 | Medium |
+| internal/handler/tui/testdata/golden/*.txt | CREATE | - | - |
+| internal/handler/cli/cli_modes_test.go | CREATE | 150 | Medium |
+| internal/handler/cli/output_snapshot_test.go | CREATE | 100 | Low |
+| .github/workflows/ci.yml | MODIFY | - | Low |
+
+---
+
+## Testing Utilities (New)
+
+### internal/handler/tui/golden_test.go
+
+```go
+package tui
+
+import (
+	"bytes"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func compareGolden(t *testing.T, actual string) error {
+	// Load golden file from testdata/golden/[test_name].txt
+	// If UPDATE_GOLDEN=1, write actual → golden
+	// Otherwise, compare actual vs golden
+}
+
+func updateGoldenFiles() bool {
+	return os.Getenv("UPDATE_GOLDEN") == "1"
+}
+```
+
+Usage:
+```bash
+# First run: create golden files
+UPDATE_GOLDEN=1 go test ./internal/handler/tui/...
+
+# Subsequent runs: compare
+go test ./internal/handler/tui/...
+```
+
+---
+
+## Success Criteria
+
+- [ ] Coverage ≥ 70%
+- [ ] All entry points (cmd/) tested
+- [ ] CLI interactive paths testable (terminal adapter in place)
+- [ ] TUI rendering verified via snapshots (no false positives)
+- [ ] CI gates updated (coverage threshold → 70%)
+- [ ] Golden file maintenance docs written
+
+---
+
+## Known Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|-----------|
+| Snapshot tests become stale | High | Keep golden files in git, review diffs carefully |
+| PTY mocking fragile | High | Use thin adapter layer, test adapters not full menu flow |
+| TUI library updates break tests | Medium | Pin versions, add compatibility tests for new versions |
+| Diminishing test ROI | Medium | Document trade-offs, focus on Phase 4A first |
+
+---
+
+## Next Steps (When Ready)
+
+1. **Approve Phase 4A** (fast path) for 57% coverage
+2. **Implement 4.1, 4.4, 4.5** in 1-2 sprints
+3. **Evaluate Phase 4B** ROI before TUI snapshot work
+4. **Update CI workflow** with new 70% gate
+5. **Document snapshot maintenance** for team
+
+---
+
+## Appendix: Alternative Approaches
+
+### A1: Browser-Based Testing (Rejected)
+- Use headless browser to test TUI via websocket tunnel
+- **Reason**: Adds external dependency, fragile, overkill for CLI
+
+### A2: Full E2E Screenshot Testing (Rejected)
+- Capture terminal output, compare pixel-perfect renders
+- **Reason**: Terminal rendering varies by font/terminal, not portable
+
+### A3: Remove TUI Code from Coverage (Not Recommended)
+- Exclude internal/handler/tui from coverage calculation
+- **Reason**: Hides untested code, worse for end users
+
+### A4: Refactor TUI to Model-View Pattern (Accepted for Phase 4B)
+- Extract rendering logic from view functions
+- Test models directly, snapshot views
+- **Why**: Reduces TUI test complexity from Very High → Medium
+
+---
+
+## References
+
+- [Phase 3 Tech Spec](2026-05-09-pdf2md-tui-qa-3phase-tech-spec.md)
+- [Bubble Tea Testing Guide](https://github.com/charmbracelet/bubbletea/wiki/Testing)
+- [Golden File Testing Pattern](https://en.wikipedia.org/wiki/Test_data#Golden_master)
+- [PTY Simulation for CLI Testing](https://github.com/traefik/yaegi/blob/master/internal/test/pty.go)
+
+---
+
+**Document**: 2026-05-09  
+**Author**: QA Implementation  
+**Status**: Draft (Ready for Approval)
