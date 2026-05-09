@@ -49,3 +49,21 @@ The following assertions are integrated into `pkg/service/qa_validation_test.go`
 3. **Convert:** `bin/pdf2md-tui convert ./testdata --force --quiet`
 4. **Validate:** `go test ./pkg/service -v -run TestQA_ConversionQuality`
 5. **Report:** Generate `qa_report.json` for CI visibility.
+
+---
+
+## 6. QA Retrospective: Pain Points & Scalability
+*Self-reflection on the v1.2.7 extraction overhaul session.*
+
+### 🛑 Critical Pain Points
+1.  **The "Heuristic Chase":** Statistical coalescing (Mean/StdDev) is inherently fragile across different PDF generators. Changes in source document fonts (LaTeX vs. MS Word) necessitated multiple iterative calibration loops.
+2.  **Ambiguous Ground Truth:** Current validation relies on `grep` for specific markers (`across`, `ebooks`). This creates "blind spots" for regressions in words not explicitly tracked in the test suite.
+3.  **Encoding Breakdown Blindspots:** Certain PDF encodings fail silently, producing high-entropy "garbage text." Detecting these via standard assertions is difficult without specialized entropy checks.
+4.  **Visual vs. Logical Layout:** Table layouts often "look" correct to humans but contain micro-misalignments that break downstream AI parsers. Simple string matching is insufficient for structural validation.
+
+### 📈 Scalability Improvements (Future QA Discipline)
+1.  **Golden-Master Snapshot Testing:** Transition to using "Golden Markdown" reference files. Any change in conversion output should trigger a mandatory human-reviewed diff. This ensures 100% content coverage instead of marker-based checks.
+2.  **Source-Aware Tolerance Profiles:** Implement document-specific extraction profiles. A "LaTeX Profile" might use stricter character bounds, while an "Office Profile" handles more aggressive tracking.
+3.  **Shannon Entropy Monitoring:** Integrate automated garbage detection using character entropy. If a block's entropy exceeds a threshold, it should be flagged for OCR rather than emitting corrupted text.
+4.  **Semantic Similarity Metrics:** For critical documents, use a small LLM or BERT-based scorer to verify that extraction hasn't destroyed the semantic meaning (e.g., merging "not" with another word).
+5.  **Synthetic PDF Mocking:** Develop a test utility to generate PDFs with precisely controlled character coordinates. This allows for unit-testing the extraction engine against mathematical edge cases without opaque binary files.
