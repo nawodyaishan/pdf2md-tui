@@ -20,6 +20,7 @@ var (
 	forceOverwrite bool
 	extractImages  bool
 	logFile        string
+	entropyThresh  float64
 )
 
 var rootCmd = &cobra.Command{
@@ -54,6 +55,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&forceOverwrite, "force", "f", false, "Overwrite existing output files without prompting")
 	rootCmd.PersistentFlags().BoolVar(&extractImages, "extract-images", false, "Extract embedded images and inject markdown references")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "pdf2md.log", "Path to save detailed conversion logs")
+	rootCmd.PersistentFlags().Float64Var(&entropyThresh, "entropy-threshold", 0, "Entropy threshold for noise filtering (0 to disable)")
 
 	rootCmd.AddCommand(convertCmd)
 	rootCmd.AddCommand(versionCmd)
