@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	ledongpdf "github.com/ledongthuc/pdf"
-	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
 const (

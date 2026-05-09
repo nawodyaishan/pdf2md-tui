@@ -40,7 +40,7 @@
 
 ## Features
 
-- **Chunking-safe tables** — positional text analysis detects column alignment and emits GFM pipe tables as indivisible atomic units, preventing downstream chunkers from destroying table integrity
+- **Chunking-safe tables** — Basic table reconstruction exists; robust chunking-safe table blocks are planned. Positional text analysis detects column alignment and emits GFM pipe tables.
 - **Two-path extraction** — positional extraction first (preserves structure); falls back to plain-text for edge cases
 - **Worker pool** — concurrent conversion using `runtime.NumCPU()` workers by default; configurable via `--workers`
 - **Live TUI** — Bubble Tea dashboard for batch conversion with live stats, recent activity, and a completion menu
@@ -116,14 +116,14 @@ pdf2md-tui version
 Since the refactoring to Clean Architecture, you can embed the conversion engine directly into your own Go applications.
 
 > [!NOTE]
-> The core logic currently resides in `internal/` packages. To use this in an external module, you should move `internal/domain`, `internal/service`, and `internal/repository` to a public directory like `pkg/` or the root.
+> The core logic resides in the `pkg/` directory, making it importable as a standard Go module.
 
 ```go
 import (
-	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
-	"github.com/nawodyaishan/pdf2md-tui/internal/repository/pdf"
-	"github.com/nawodyaishan/pdf2md-tui/internal/repository/storage"
-	"github.com/nawodyaishan/pdf2md-tui/internal/service"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/repository/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/repository/storage"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/service"
 )
 
 func main() {
@@ -218,7 +218,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed breakdown of the
 - [x] **🖼️ Image Extraction Pipeline** — Extract raw images for "Look Twice" VLM workflows.
 - [x] **⚡ Zero-Arg Usability** — Run `pdf2md-tui` in any folder with no arguments.
 - [x] **🏗️ Clean Architecture** — Decoupled domain/service/repository structure for scaling.
-- [ ] **🧱 Chunking-Safe Tables** — Atomic GFM pipe tables for hybrid vector chunkers.
+- [x] **🧱 Chunking-Safe Tables** — Basic GFM pipe table support (v1.0). Robust indivisible blocks planned.
 - [x] **🔇 CI-Friendly Quiet Mode** — Non-interactive JSON output for automation.
 - [ ] **🔌 MCP Server Wrapper** — Native tool support for Model Context Protocol agents.
 - [ ] **☁️ VLM Cloud Integration** — High-accuracy Markdown generation via GPT-4o/Claude.

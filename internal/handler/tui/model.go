@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
 // Messages

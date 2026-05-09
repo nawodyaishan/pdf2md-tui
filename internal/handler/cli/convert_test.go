@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
 func TestMergeResultsPreservesPreflightResults(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nawodyaishan/pdf2md-tui/internal/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
