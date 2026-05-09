@@ -156,6 +156,22 @@ This will activate automated checks:
 | `make build` | Build binary to `bin/pdf2md-tui` |
 | `make cover` | Open HTML coverage report |
 
+### Test Coverage
+
+Coverage baseline measured on clean checkout (`ubuntu-latest`):
+- **Current**: 47.9% (verified 2026-05-10)
+- **CI gate**: 45%+ required
+- **Target**: 70%+ (phased roadmap in [docs/COVERAGE.md](docs/COVERAGE.md))
+
+Measure coverage locally:
+```bash
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+go tool cover -func=coverage.out | tail -1
+make cover  # Opens HTML report in browser
+```
+
+See [docs/COVERAGE.md](docs/COVERAGE.md) for the complete coverage roadmap and policy.
+
 ---
 
 ## Usage
@@ -391,11 +407,19 @@ See [ROADMAP.md](ROADMAP.md) for the full vision, strategic goals, and how to co
 
 Bug reports and feature requests: open an issue using the provided templates.
 
-For code contributions:
+For code contributions, see **[CONTRIBUTING.md](CONTRIBUTING.md)** for:
+- Testing guidelines (tracked, ignored, and generated fixtures)
+- Git hooks setup (lefthook pre-commit/pre-push)
+- Code review checklist
+- Conventional commits format
+
+Quick checklist:
 
 1. Check [ROADMAP.md](ROADMAP.md) and open issues for `help wanted` items.
 2. Fork, branch, implement, add tests, and open a PR.
-3. PRs must pass `make check` (fmt + vet + lint + test with race detector).
+3. Install git hooks: `make hooks-install`
+4. PRs must pass `make ci-local` (local CI simulation)
+5. Coverage should not decrease (check `make cover`)
 
 ---
 

@@ -32,7 +32,7 @@ run: build ## Build and run a quick smoke test against ./testdata
 # ── Quality ────────────────────────────────────────────────────────────────────
 
 test: ## Run the test suite with race detection and coverage
-	go test -race -coverprofile=coverage.out ./...
+	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
 cover: test ## Open HTML coverage report in the browser
 	go tool cover -html=coverage.out
@@ -62,6 +62,9 @@ tidy: ## Tidy go.mod and go.sum
 	go mod tidy
 
 check: fmt vet lint test cover-check ## Run all quality checks (fmt, vet, lint, test, cover-check)
+
+ci-local: fmt vet lint cover-check ## Simulate CI locally (all checks in sequence)
+	@echo "✅ All CI checks passed locally"
 
 hooks-install: ## Install Git hooks via Lefthook
 	@command -v lefthook >/dev/null 2>&1 || { \
