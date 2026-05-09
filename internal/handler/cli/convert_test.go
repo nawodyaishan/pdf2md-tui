@@ -59,3 +59,57 @@ func TestResolveOverwritePolicyRequiresForceInNonInteractiveMode(t *testing.T) {
 		t.Fatal("non-interactive mode should not request a prompt")
 	}
 }
+
+func TestResolveOverwritePolicyAllowsWithForceFlag(t *testing.T) {
+	needsPrompt, err := resolveOverwritePolicy([]string{"existing.md"}, true, false)
+
+	if err != nil {
+		t.Fatalf("expected no error with --force flag, got %v", err)
+	}
+	if needsPrompt {
+		t.Fatal("force flag should not require a prompt")
+	}
+}
+
+func TestResolveOverwritePolicyAllowsEmptyExistingPaths(t *testing.T) {
+	needsPrompt, err := resolveOverwritePolicy([]string{}, false, false)
+
+	if err != nil {
+		t.Fatalf("expected no error with empty existing paths, got %v", err)
+	}
+	if needsPrompt {
+		t.Fatal("no existing files should not require a prompt")
+	}
+}
+
+func TestMergeResultsHandlesEmptyLists(t *testing.T) {
+	results := mergeResults([]domain.Result{}, []domain.Result{})
+
+	if len(results) != 0 {
+		t.Fatalf("expected empty results, got %d items", len(results))
+	}
+}
+
+func TestMergeResultsCombinesPreflightAndLive(t *testing.T) {
+	preflight := []domain.Result{
+		{InputPath: "a.pdf", Status: domain.StatusIgnored},
+		{InputPath: "b.pdf", Status: domain.StatusIgnored},
+	}
+	live := []domain.Result{
+		{InputPath: "c.pdf", Status: domain.StatusOK},
+	}
+
+	results := mergeResults(preflight, live)
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+}
+
+func TestSummarizeResultsEmptyInput(t *testing.T) {
+	totals := summarizeResults([]domain.Result{})
+
+	if totals.converted != 0 || totals.ignored != 0 || totals.errCount != 0 {
+		t.Fatalf("expected zero counts for empty input, got %+v", totals)
+	}
+}

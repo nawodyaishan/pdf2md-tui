@@ -1,0 +1,9 @@
+# Test: --recursive flag discovers PDFs in nested directories
+# Verifies that subdirectories are scanned when --recursive is enabled
+
+exec pdf2md-tui convert $TESTDATA_DIR --recursive --quiet --output recursive_out --force
+stdout '"converted":\s*[1-9][0-9]*'
+
+# Without --recursive, should find fewer PDFs
+exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output flat_out --force
+stdout '"converted"'

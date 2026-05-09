@@ -1,0 +1,14 @@
+# Test: Second conversion without --force fails with overwrite error
+# Ensures files are not silently overwritten in non-interactive mode
+
+# First run with --force to ensure clean state
+exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output overwrite_test --force
+! stderr .
+
+# Second run without --force should fail due to existing files
+! exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output overwrite_test
+stderr 'force|already exists|overwrite'
+
+# Third run with --force should succeed
+exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output overwrite_test --force
+stdout '"converted"'

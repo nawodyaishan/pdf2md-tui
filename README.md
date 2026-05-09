@@ -1,6 +1,9 @@
 # pdf2md-tui
 
-> High-speed PDF → Markdown ingestion engine for multimodal RAG pipelines. Extracts structured text + isolated images so downstream chunkers, LlamaIndex, and VLM agents get context that actually works.
+> Fast local PDF ingestion for RAG/VLM pipelines.
+> Batch-convert PDFs into structured Markdown plus extracted images, with a TUI for humans and JSON output for automation.
+
+No cloud API, no GPU, no Python environment — just a single Go binary.
 
 [![CI](https://github.com/nawodyaishan/pdf2md-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/nawodyaishan/pdf2md-tui/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nawodyaishan/pdf2md-tui)](go.mod)
@@ -17,30 +20,39 @@
 
 **PDFs break AI pipelines.** Binary encoding, embedded fonts, and layout metadata inflate token counts — but the real damage is structural. Legacy parsers flatten documents into raw text, destroying tables, orphaning image references, and producing vector embeddings that are functionally useless for retrieval.
 
-`pdf2md-tui` solves this by extracting **structured Markdown** with preserved table layouts alongside an isolated `./images/` directory — the exact format that modern RAG frameworks (LlamaIndex, LangChain) and Vision-Language Models expect.
+`pdf2md-tui` turns folders of digital PDFs into a filesystem-friendly output contract: **structured Markdown** plus a local `./images/` directory. That gives downstream chunkers, vector stores, LlamaIndex/LangChain workflows, and VLM agents cleaner context to work with.
 
-| Document | Naive VLM / Image Processing (est. API cost) | Clean Markdown (est. token cost) | Context Quality |
+| Document | Naive VLM / image processing (est. token cost) | Clean Markdown (est. token cost) | Context Quality |
 |---|---|---|---|
-| 50-page technical spec | ~42,500 tokens (Image API) | ~15,000 tokens (Clean text) | **Noise-free, structured** |
-| 200-page legal contract | ~170,000 tokens (Image API) | ~60,000 tokens (Clean text) | **Noise-free, structured** |
-| Research paper (12 pages) | ~10,200 tokens (Image API) | ~3,500 tokens (Clean text) | **Noise-free, structured** |
+| 50-page technical spec | ~42,500 tokens | ~15,000 tokens | **Cleaner, structured** |
+| 200-page legal contract | ~170,000 tokens | ~60,000 tokens | **Cleaner, structured** |
+| Research paper (12 pages) | ~10,200 tokens | ~3,500 tokens | **Cleaner, structured** |
 
-*Estimates reflect common API token costs for Vision vs. Text ingestion. Actual savings depend on document density and VLM provider.*
+*Estimates illustrate the common cost gap between image-heavy ingestion and text-first ingestion. Actual savings depend on document density, extraction quality, and provider pricing.*
 
 **Built for the "Look Twice" methodology** — extract text + isolate images at ingestion time (Phase 1), then let your downstream VLM pipeline handle deep visual reasoning at retrieval time (Phase 2).
 
-**Use cases:**
+`pdf2md-tui` is intentionally narrow: it does not try to be a full document intelligence platform. It focuses on fast local batch conversion of digital PDFs into Markdown plus image assets, with predictable files that downstream tools can index.
 
-- Preprocessing document archives for RAG pipelines (LlamaIndex `SimpleDirectoryReader` compatible)
-- Building multimodal knowledge bases with text + image vector stores
-- Feeding autonomous AI agents via MCP with structured, parseable document context
-- Reducing token costs when processing large document sets via API
+**Use it when:**
+
+- You have folders of digital PDFs to prepare for RAG.
+- You want local Markdown and image files without a cloud parser.
+- You need a CLI/TUI that can run in scripts and terminals.
+- You prefer a single static binary over a Python/ML stack.
+
+**Use a heavier parser when:**
+
+- You need OCR-heavy scanned document handling.
+- You need advanced formula, chart, or table understanding.
+- You need bounding boxes, semantic element JSON, or enterprise connectors.
+- You need maximum extraction accuracy over local simplicity.
 
 ---
 
 ## Features
 
-- **Chunking-safe tables** — Basic table reconstruction exists; robust chunking-safe table blocks are planned. Positional text analysis detects column alignment and emits GFM pipe tables.
+- **Table-aware Markdown** — detects column-aligned rows and emits GFM pipe tables; more robust chunk-preserving table blocks are planned
 - **Two-path extraction** — positional extraction first (preserves structure); falls back to plain-text for edge cases
 - **Worker pool** — concurrent conversion using `runtime.NumCPU()` workers by default; configurable via `--workers`
 - **Live TUI** — Bubble Tea dashboard for batch conversion with live stats, recent activity, and a completion menu
@@ -51,27 +63,6 @@
 - **Automation-friendly modes** — `--quiet` emits a JSON summary; non-TTY non-quiet runs fall back to a plain-text summary without alt-screen UI
 - **Date-stamped outputs** — `report_2026-05-06.md` so you always know which version was processed
 - **Single static binary** — no runtime dependencies; `CGO_ENABLED=0`, pure Go
-
----
-
-## 🚀 Recent Quality Improvements
-
-We've recently overhauled the core extraction engine to move beyond simple text scraping toward **semantic document reconstruction**. These changes ensure that the output Markdown is truly RAG-ready and "chunking-safe."
-
-### 🏗️ Advanced Extraction Engine (v1.2.7+)
-- **Adaptive Spacing Heuristics:** Uses line-level gap statistics (Mean/StdDev) to correctly coalesce intentionally tracked headings (e.g., `D E F I N I T I V E`) into single words while maintaining natural word separation.
-- **Double-Letter Preservation:** Disabled aggressive character deduplication in favor of a content-first strategy. Legitimate double letters (e.g., `across`, `ebooks`, `www`) are now perfectly preserved across all document sources.
-- **Block-Aware Optimization:** Refactored the `--strip-noise` pipeline. Whitespace collapsing is now scoped to individual blocks, strictly preserving paragraph boundaries (`\n\n`) and table structures.
-- **Standardized Unicode:** Integrated `norm.NFKC` for industry-standard normalization. All extracted text now features consistent resolution of ligatures (`fi`, `fl`, etc.) and PUA characters.
-
-### ✅ Automated QA Validation
-To ensure long-term scalability and prevent regressions, we implemented a formal [QA Test Plan](docs/specs/qa_test_plan.md) with an automated validation suite (`pkg/service/qa_validation_test.go`). 
-
-**Core Assertions Verified:**
-- **Content Fidelity:** Zero collapse of legitimate double letters.
-- **Structural Integrity:** Guaranteed minimum paragraph density in optimized output.
-- **Semantic Coherence:** Coalescing of styled headings and specialized technical symbols (`→`, `•`).
-- **Cleanliness:** Zero-tolerance policy for replacement characters (`U+FFFD`) and "garbage" encoding sequences.
 
 ---
 
@@ -96,6 +87,90 @@ go install github.com/nawodyaishan/pdf2md-tui/cmd/pdf2md-tui@latest
 Download a pre-built binary for your platform from the [latest release](https://github.com/nawodyaishan/pdf2md-tui/releases/latest).
 
 Platforms: Linux, macOS, Windows × amd64 / arm64. Packages: `.tar.gz`, `.zip`, `.deb`, `.rpm`.
+
+---
+
+## Development
+
+### Prerequisites
+
+Before cloning and developing, install the required tools:
+
+**Required:**
+- **Go 1.26.3+** — [Install](https://go.dev/dl)
+- **Lefthook** — Git hooks runner for code quality checks
+  ```bash
+  # macOS / Linux
+  brew install lefthook
+  
+  # Or via Go
+  go install github.com/evilmartians/lefthook/v2@v2.1.6
+  ```
+
+**Recommended:**
+- **golangci-lint** — Unified linter (optional if you only run tests)
+  ```bash
+  # macOS / Linux
+  brew install golangci-lint
+  
+  # Or via Go
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  ```
+
+**Why Lefthook?** It prevents commits that fail linting, formatting, or tests, catching issues before they reach CI.
+
+> **Note:** If lefthook isn't installed, commits will be blocked with a helpful error message. This is intentional and protects code quality.
+
+### Setup
+
+After cloning, run the setup script (recommended):
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+Or manually:
+
+```bash
+# Install git hooks (runs on pre-commit and pre-push)
+make hooks-install
+
+# Or directly
+lefthook install
+```
+
+This will activate automated checks:
+- **pre-commit**: `gofmt`, `go vet`, `golangci-lint` on staged files
+- **pre-push**: full test suite + build validation
+
+> **Note:** Commits will be **blocked** if lefthook is not installed. This protects code quality by ensuring all commits pass linting before reaching CI.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `make test` | Run full test suite with race detector and coverage |
+| `make lint` | Run golangci-lint (requires lefthook/golangci-lint) |
+| `make vet` | Run go vet analysis |
+| `make fmt` | Format all Go files |
+| `make build` | Build binary to `bin/pdf2md-tui` |
+| `make cover` | Open HTML coverage report |
+
+### Test Coverage
+
+Coverage baseline measured on clean checkout (`ubuntu-latest`):
+- **Current**: 47.9% (verified 2026-05-10)
+- **CI gate**: 45%+ required
+- **Target**: 70%+ (phased roadmap in [docs/COVERAGE.md](docs/COVERAGE.md))
+
+Measure coverage locally:
+```bash
+go test -race -coverprofile=coverage.out -covermode=atomic ./...
+go tool cover -func=coverage.out | tail -1
+make cover  # Opens HTML report in browser
+```
+
+See [docs/COVERAGE.md](docs/COVERAGE.md) for the complete coverage roadmap and policy.
 
 ---
 
@@ -234,13 +309,35 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed breakdown of the
 
 ---
 
+## Recent Quality Improvements
+
+The core extraction engine has moved beyond simple text scraping toward more reliable Markdown reconstruction for RAG workflows.
+
+### Advanced Extraction Engine (v1.2.7+)
+
+- **Adaptive spacing heuristics** — uses line-level gap statistics to coalesce intentionally tracked headings, such as `D E F I N I T I V E`, while preserving natural word separation
+- **Double-letter preservation** — avoids aggressive character deduplication so legitimate double letters, such as `across`, `ebooks`, and `www`, are preserved
+- **Block-aware optimization** — scopes whitespace cleanup to individual blocks so paragraph boundaries and table structures are less likely to be damaged
+- **Standardized Unicode** — applies `norm.NFKC` normalization for ligatures and private-use characters
+
+### Automated QA Validation
+
+The project tracks extraction regressions through the [QA Test Plan](docs/specs/qa_test_plan.md) and automated tests covering:
+
+- **Content fidelity** — legitimate repeated characters should not collapse
+- **Structural integrity** — optimized output should retain useful paragraph density
+- **Semantic coherence** — styled headings and technical symbols should survive cleanup
+- **Cleanliness** — replacement characters (`U+FFFD`) and obvious encoding garbage are treated as defects
+
+---
+
 ## Roadmap Status
 
 - [x] **🛡️ Graceful OCR Detection** — Detect and skip scanned PDFs without failing.
 - [x] **🖼️ Image Extraction Pipeline** — Extract raw images for "Look Twice" VLM workflows.
 - [x] **⚡ Zero-Arg Usability** — Run `pdf2md-tui` in any folder with no arguments.
 - [x] **🏗️ Clean Architecture** — Decoupled domain/service/repository structure for scaling.
-- [x] **🧱 Chunking-Safe Tables** — Basic GFM pipe table support (v1.0). Robust indivisible blocks planned.
+- [x] **🧱 Table-Aware Markdown** — Basic GFM pipe table support (v1.0). Robust indivisible blocks planned.
 - [x] **🔇 CI-Friendly Quiet Mode** — Non-interactive JSON output for automation.
 - [ ] **🔌 MCP Server Wrapper** — Native tool support for Model Context Protocol agents.
 - [ ] **☁️ VLM Cloud Integration** — High-accuracy Markdown generation via GPT-4o/Claude.
@@ -298,7 +395,7 @@ make hooks-run-pre-push
 
 The roadmap is organized around maximizing **context quality** for downstream AI pipelines:
 
-- **Near-term (v0.x)** — Image extraction pipeline (`pdfcpu`), graceful OCR detection, chunking-safe table output, `--quiet` JSON mode for CI/MCP
+- **Near-term (v0.x)** — Image extraction pipeline (`pdfcpu`), graceful OCR detection, stronger table-aware Markdown output, `--quiet` JSON mode for CI/MCP
 - **Mid-term (v1.x)** — "Look Twice" VLM pipeline (cloud vision providers), MCP server prototype, `.docx`/`.txt` ingestion
 - **Long-term (v2.x)** — Pluggable post-processors, full MCP server + REST API
 
@@ -310,11 +407,19 @@ See [ROADMAP.md](ROADMAP.md) for the full vision, strategic goals, and how to co
 
 Bug reports and feature requests: open an issue using the provided templates.
 
-For code contributions:
+For code contributions, see **[CONTRIBUTING.md](CONTRIBUTING.md)** for:
+- Testing guidelines (tracked, ignored, and generated fixtures)
+- Git hooks setup (lefthook pre-commit/pre-push)
+- Code review checklist
+- Conventional commits format
+
+Quick checklist:
 
 1. Check [ROADMAP.md](ROADMAP.md) and open issues for `help wanted` items.
 2. Fork, branch, implement, add tests, and open a PR.
-3. PRs must pass `make check` (fmt + vet + lint + test with race detector).
+3. Install git hooks: `make hooks-install`
+4. PRs must pass `make ci-local` (local CI simulation)
+5. Coverage should not decrease (check `make cover`)
 
 ---
 

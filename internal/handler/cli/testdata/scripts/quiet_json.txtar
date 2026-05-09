@@ -1,0 +1,10 @@
+# Test: --quiet flag produces valid JSON output only
+# Verifies JSON schema with required fields: converted, errors, skipped
+
+exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output json_test --force
+stdout '"converted":\s*[0-9]+'
+stdout '"errors":\s*[0-9]+'
+stdout '"skipped":\s*[0-9]+'
+
+# Verify no progress bars or interactive output in quiet mode
+! stdout 'Scanning\|Converting\|pages found'

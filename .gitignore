@@ -45,10 +45,10 @@ ehthumbs.db
 Thumbs.db
 
 # Project Specific
-debug-pdf
+/debug-pdf
 internal-docs/
 md/
-testdata/
+/testdata/
 !testdata/devops_project/golden/*.golden.md
 
 # Environment & secrets
@@ -58,3 +58,4 @@ testdata/
 *.key
 pdf2md.log
 GEMINI.md
+bench.txt

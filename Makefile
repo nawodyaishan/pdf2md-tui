@@ -1,9 +1,10 @@
-.PHONY: build test lint fmt vet tidy snapshot cover run clean release tag help \
+.PHONY: build test lint fmt vet tidy snapshot cover cover-check bench run clean release tag help \
 	check hooks-install hooks-run-pre-commit hooks-run-pre-push hooks-validate
 
 APP_NAME    := pdf2md-tui
 BIN_DIR     := bin
 BINARY      := $(BIN_DIR)/$(APP_NAME)
+COVERAGE_THRESHOLD ?= 45
 
 VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -31,15 +32,25 @@ run: build ## Build and run a quick smoke test against ./testdata
 # ── Quality ────────────────────────────────────────────────────────────────────
 
 test: ## Run the test suite with race detection and coverage
-	go test -race -coverprofile=coverage.out ./...
+	go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
 cover: test ## Open HTML coverage report in the browser
 	go tool cover -html=coverage.out
 
-lint: ## Run golangci-lint (skips gracefully if not installed)
-	@which golangci-lint >/dev/null 2>&1 \
-		&& golangci-lint run ./... \
-		|| echo "⚠  golangci-lint not found — skipping (install: brew install golangci-lint)"
+cover-check: test ## Check that coverage meets the configured minimum threshold
+	@go tool cover -func=coverage.out \
+		| awk -v threshold="$(COVERAGE_THRESHOLD)" '/total:/{cov=$$3+0; if(cov<threshold){printf "FAIL: Coverage %.1f%% < %.1f%% threshold\n",cov,threshold; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
+
+bench: ## Run benchmarks and output results
+	go test -bench=. -benchmem -count=5 ./pkg/... 2>/dev/null | tee bench.txt
+	@echo "Benchmark results written to bench.txt"
+
+lint: ## Run golangci-lint
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "ERROR: golangci-lint is required. Install it with 'brew install golangci-lint'."; \
+		exit 1; \
+	}
+	golangci-lint run ./...
 
 fmt: ## Format all Go source files
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
@@ -50,7 +61,10 @@ vet: ## Run go vet
 tidy: ## Tidy go.mod and go.sum
 	go mod tidy
 
-check: fmt vet lint test ## Run all quality checks (fmt, vet, lint, test)
+check: fmt vet lint test cover-check ## Run all quality checks (fmt, vet, lint, test, cover-check)
+
+ci-local: fmt vet lint cover-check ## Simulate CI locally (all checks in sequence)
+	@echo "✅ All CI checks passed locally"
 
 hooks-install: ## Install Git hooks via Lefthook
 	@command -v lefthook >/dev/null 2>&1 || { \

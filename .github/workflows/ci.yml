@@ -5,10 +5,36 @@ on:
     branches: [ main, dev, staging ]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
+env:
+  COVERAGE_THRESHOLD: "45"
+
 jobs:
+  # Fast checks — run first (1 min total)
+  format:
+    name: Format & Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          if [ -n "$(gofmt -l ./...)" ]; then
+            echo "❌ Code not formatted. Run: make fmt"
+            gofmt -l ./...
+            exit 1
+          fi
+      - name: Run go vet
+        run: go vet ./...
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -20,9 +46,12 @@ jobs:
       - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.9.0
+          args: --timeout=5m
 
+  # Test job — can run in parallel with security
   test:
     name: Test (${{ matrix.os }})
+    needs: [ format, lint ]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -33,10 +62,31 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Run tests
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
-      - name: Upload coverage
+
+      - name: Run tests with race detector
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      # Coverage gate (ubuntu only, authoritative)
+      - if: matrix.os == 'ubuntu-latest'
+        name: Check coverage baseline
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 45" | bc -l) )); then
+            echo "❌ Coverage ${COVERAGE}% below clean-checkout baseline (45%)"
+            exit 1
+          fi
+          echo "✅ Coverage ${COVERAGE}% meets baseline"
+
+      - name: Run fuzz tests (30s)
         if: matrix.os == 'ubuntu-latest'
+        run: |
+          go test -fuzz=FuzzCoalesceChars -fuzztime=30s ./pkg/repository/pdf/
+          go test -fuzz=FuzzApplyLLMOptimizations -fuzztime=30s ./pkg/service/
+
+      # Upload coverage (ubuntu only)
+      - if: matrix.os == 'ubuntu-latest'
+        name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
           files: coverage.out
@@ -44,9 +94,31 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+      - if: matrix.os == 'ubuntu-latest'
+        name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  # Security scan (can run in parallel with test)
+  security:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # Build validation (after test passes)
   build:
     name: Build verification
-    needs: [ lint, test ]
+    needs: [ test ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,3 +129,33 @@ jobs:
         run: go build -o ./bin/pdf2md-tui ./cmd/pdf2md-tui
       - name: Smoke test
         run: ./bin/pdf2md-tui version
+
+  benchmarks:
+    name: Benchmark regression detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run benchmarks (current PR)
+        run: go test -bench=. -benchmem -count=5 ./pkg/... | tee bench_pr.txt
+      - name: Checkout main branch
+        run: git fetch origin main && git checkout origin/main
+      - name: Run benchmarks (main baseline)
+        run: go test -bench=. -benchmem -count=5 ./pkg/... | tee bench_main.txt
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+      - name: Compare benchmarks
+        run: benchstat bench_main.txt bench_pr.txt
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            bench_pr.txt
+            bench_main.txt
+        if: always()
