@@ -38,13 +38,22 @@ func (d *document) NumPages() int {
 	return d.reader.NumPage()
 }
 
+// pageWrapper wraps ledongpdf.Page to satisfy the Page interface.
+type pageWrapper struct {
+	page ledongpdf.Page
+}
+
+func (pw *pageWrapper) Content() ledongpdf.Content {
+	return pw.page.Content()
+}
+
 func (d *document) ExtractPageBlocks(pageNum int) ([]domain.PageBlock, error) {
 	page := d.reader.Page(pageNum)
 	if page.V.IsNull() {
 		return nil, nil
 	}
 
-	blocks := extractPageBlocks(page)
+	blocks := extractPageBlocks(&pageWrapper{page: page})
 	return blocks, nil
 }
 
