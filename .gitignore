@@ -56,3 +56,4 @@ md/
 *.pem
 *.key
 pdf2md.log
+GEMINI.md
