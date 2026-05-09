@@ -188,25 +188,86 @@ Extracted from `/websites/pkg_go_dev_github_com_charmbracelet_bubbletea` (Source
 
 **Approach**: Store rendered output as golden files, compare on each test. Update golden files when intentional visual changes occur.
 
-### 4.2.2 View Model Tests
+### 4.2.2 Rendering Function Tests
 
-Create `internal/handler/tui/view_test.go`:
+Create `internal/handler/tui/render_test.go` testing functions from `dashboard_render.go` (32 symbols):
 
 ```go
-func TestViewHeaderFormat(t *testing.T) {
-	// Test renderHeader() output format
+package tui
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+)
+
+func TestRenderHeaderFormat(t *testing.T) {
+	// From dashboard_render.go:14 - renderDashboard()
+	// Test header with title, width constraints
+	header := renderHeader("pdf2md-tui", 80)
+	if !strings.Contains(header, "pdf2md-tui") {
+		t.Error("header should display title")
+	}
 }
 
-func TestViewFooterCommands(t *testing.T) {
-	// Test renderFooter() displays correct exit options
+func TestRenderStatsValues(t *testing.T) {
+	// From dashboard_render.go:47 - renderStats()
+	// Test statistics display (converted, skipped, errors counts)
+	stats := renderStats(5, 2, 1, 1024*1024)
+	if !strings.Contains(stats, "5") || !strings.Contains(stats, "2") {
+		t.Error("stats should display counts")
+	}
 }
 
-func TestCompletionViewMenu(t *testing.T) {
-	// Test menu items at completion state
+func TestRenderProgressBar(t *testing.T) {
+	// From dashboard_render.go:131 - renderProgressBar()
+	// Test progress visualization at different percentages
+	for _, pct := range []int{0, 25, 50, 75, 100} {
+		bar := renderProgressBar(pct, 40)
+		if len(bar) == 0 {
+			t.Errorf("progress bar at %d%% should not be empty", pct)
+		}
+	}
+}
+
+func TestTruncatePath(t *testing.T) {
+	// From dashboard_render.go:153 - truncatePath()
+	paths := []string{
+		"/very/long/path/to/pdf/file.pdf",
+		"short.pdf",
+	}
+	for _, p := range paths {
+		truncated := truncatePath(p, 30)
+		if len(truncated) > 30 {
+			t.Errorf("truncated path exceeds width: %d > 30", len(truncated))
+		}
+	}
+}
+
+func TestFormatDurationDisplay(t *testing.T) {
+	// From dashboard_render.go:160 - formatDuration()
+	// Test duration formatting: 1.5s, 2m30s, etc.
+	tests := []struct {
+		name     string
+		millis   int
+		expected string
+	}{
+		{"milliseconds", 500, "500ms"},
+		{"seconds", 2500, "2.5s"},
+		{"minutes", 150000, "2m30s"},
+	}
+	for _, tt := range tests {
+		result := formatDuration(tt.millis)
+		if !strings.Contains(result, "s") && !strings.Contains(result, "m") {
+			t.Errorf("%s: expected duration format, got %q", tt.name, result)
+		}
+	}
 }
 ```
 
-**Coverage impact**: +15-20% (TUI has ~200 LOC in rendering functions)
+**Coverage impact**: +15-20% (dashboard_render.go: 32 symbols, ~300 LOC)  
+**Key insight**: These are pure rendering functions (no I/O), easily testable without mocking.
 
 ---
 
