@@ -6,6 +6,9 @@ import (
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
+// Compile-time assertion: diskStorage implements domain.PDFStorage
+var _ domain.PDFStorage = (*diskStorage)(nil)
+
 type diskStorage struct{}
 
 // NewStorage creates a new local disk storage instance.
