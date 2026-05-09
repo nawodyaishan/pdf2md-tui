@@ -1,10 +1,12 @@
 # QA Phase 4 — Advanced Coverage & Interactive Testing
 
-**Status**: ✅ COMPLETED  
-**Target Coverage**: 70%+ (from current 51.7%)  
-**Actual Coverage**: **76.1%** ✅  
-**Gap Closed**: **24.4 percentage points** (exceeded target by 6.1%)  
+**Status**: Superseded by CI verification on 2026-05-10
+**Target Coverage**: 70%+ (from current 51.7%)
+**Verified Clean-Checkout Coverage**: **47.9%** with the large root PDF corpus absent
+**Local Coverage With Large PDF Corpus**: **51.8%**
 **Effort**: Moderate (90% of planned Phase 4A + Phase 4B testing patterns)
+
+> CI correction note: the previous 76.1% completion claim was not reproducible from a clean checkout. The current CI gate is intentionally reset to 45% until fixture-independent tests raise the clean-checkout baseline.
 
 ---
 

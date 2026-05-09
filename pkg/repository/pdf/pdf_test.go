@@ -15,7 +15,7 @@ func TestNewParser(t *testing.T) {
 }
 
 func TestParserInterfaceAssertion(t *testing.T) {
-	var p = NewParser()
+	p := NewParser()
 	if p == nil {
 		t.Fatal("parser does not implement domain.PDFParser")
 	}
