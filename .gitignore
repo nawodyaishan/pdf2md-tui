@@ -34,6 +34,8 @@ go.work.sum
 *~
 CLAUDE.md
 task.md
+GEMINI.md
+GEMINI.md
 
 # OS generated
 .DS_Store
@@ -48,6 +50,7 @@ Thumbs.db
 debug-pdf
 internal-docs/
 testdata/
+md/
 
 # Environment & secrets
 .env
