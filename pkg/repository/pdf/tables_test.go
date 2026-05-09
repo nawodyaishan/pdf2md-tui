@@ -646,23 +646,22 @@ func TestCoalesceChars_DoubleLetters(t *testing.T) {
 }
 
 func TestCoalesceChars_SpacedHeading(t *testing.T) {
-	// Spaced heading: "T E S T" with consistent wide gaps
-	// medianW=7, gap=5. charSpaceThreshold is usually 0.2*medianW=1.4
-	// wordSpaceThreshold is 0.8*medianW=5.6
-	// In a normal line, 5pt gap would be a space.
-	// In a spaced heading line (low stddev), it should coalesce without spaces.
+	// Spaced heading: "H E A D E R" with consistent wide gaps
+	// Requires at least 6 characters (5 gaps) to trigger consistency logic.
 	texts := []ledongpdf.Text{
-		{S: "T", X: 10, Y: 100, FontSize: 12, W: 7},
+		{S: "H", X: 10, Y: 100, FontSize: 12, W: 7},
 		{S: "E", X: 22, Y: 100, FontSize: 12, W: 7}, // gap=5
-		{S: "S", X: 34, Y: 100, FontSize: 12, W: 7}, // gap=5
-		{S: "T", X: 46, Y: 100, FontSize: 12, W: 7}, // gap=5
+		{S: "A", X: 34, Y: 100, FontSize: 12, W: 7}, // gap=5
+		{S: "D", X: 46, Y: 100, FontSize: 12, W: 7}, // gap=5
+		{S: "E", X: 58, Y: 100, FontSize: 12, W: 7}, // gap=5
+		{S: "R", X: 70, Y: 100, FontSize: 12, W: 7}, // gap=5
 	}
 	result := coalesceChars(texts)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 word, got %d", len(result))
 	}
-	if result[0].text != "TEST" {
-		t.Errorf("expected 'TEST', got %q", result[0].text)
+	if result[0].text != "HEADER" {
+		t.Errorf("expected 'HEADER', got %q", result[0].text)
 	}
 }
 

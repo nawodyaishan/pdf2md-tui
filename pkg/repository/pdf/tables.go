@@ -7,6 +7,7 @@ import (
 
 	ledongpdf "github.com/ledongthuc/pdf"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -20,10 +21,8 @@ const (
 	charXNoiseFloor         = 0.5 // X-tolerance to consider coordinates stacked or noisy
 	charFallbackWidthRatio  = 0.4 // ratio of fontSize to use when width is missing
 	charDefaultWidthRatio   = 0.5 // ratio to use for median when width is missing
-	charSpaceRatio          = 0.2 // ratio of median width for kerning/stacking gap
-	wordSpaceRatio          = 0.8 // ratio of median width for standard word space
-	doublePrintXOffset      = 0.5 // max X offset to be considered a double-print fake bold
-	doublePrintYOffset      = 0.1 // max Y offset to be considered a double-print fake bold
+	charSpaceRatio          = 0.4 // ratio of median width for kerning/stacking gap (G3)
+	wordSpaceRatio          = 1.0 // ratio of median width for standard word space
 )
 
 // word represents a coalesced word with its bounding position.
@@ -134,41 +133,50 @@ func processLineIntoWords(line []indexedText) []word {
 	var widths []float64
 	var gaps []float64
 	var lastRight float64
-	for i, t := range line {
+	processedFirst := false
+	for _, t := range line {
+		if t.S == "" || t.FontSize <= 0 {
+			continue
+		}
 		w := t.W
 		if w <= 0 {
 			w = t.FontSize * charDefaultWidthRatio
 		}
 		widths = append(widths, w)
-		if i > 0 {
+		if processedFirst {
 			gap := t.X - lastRight
-			if gap > 0 {
-				gaps = append(gaps, gap)
-			}
+			gaps = append(gaps, gap)
 		}
 		lastRight = t.X + w
+		processedFirst = true
 	}
 	medianW := calculateMedian(widths)
-	medianGap := calculateMedian(gaps)
+	meanGap := calculateMean(gaps)
 	stdDevGap := calculateStdDev(gaps)
 
-	// Heuristic: If gaps are consistent (low relative stddev) but wide (high median),
-	// it's likely a spaced heading. We increase the word boundary threshold.
-	// Spaced headings often have gaps nearly as large as the character widths themselves.
-	relStdDev := 0.0
-	if medianGap > 0 {
-		relStdDev = stdDevGap / medianGap
+	relStdDev := 1.0
+	if meanGap > 0 {
+		relStdDev = stdDevGap / meanGap
 	}
-	isSpacedHeading := len(gaps) > 1 && relStdDev < 0.8 && medianGap > (medianW*charSpaceRatio)
+
+	// G3: Spaced headings have highly consistent gaps (low relStdDev).
+	// We've seen headings with relStdDev ~0.8 still failing to coalesce.
+	isSpacedHeading := len(gaps) >= 2 && relStdDev < 1.0 && meanGap > (medianW*charSpaceRatio)
 
 	charSpaceThreshold := medianW * charSpaceRatio
 	wordSpaceThreshold := medianW * wordSpaceRatio
 
 	if isSpacedHeading {
 		// Increase thresholds to prevent splitting intentional letter-spacing
-		// Use a threshold relative to the detected median gap
-		charSpaceThreshold = math.Max(charSpaceThreshold, medianGap+5.0)
-		wordSpaceThreshold = math.Max(wordSpaceThreshold, medianGap*3.0)
+		// Use the max gap on the line to ensure everything is coalesced.
+		maxGap := 0.0
+		for _, g := range gaps {
+			if g > maxGap {
+				maxGap = g
+			}
+		}
+		charSpaceThreshold = maxGap + 2.0
+		wordSpaceThreshold = maxGap * 2.0
 	}
 
 	var words []word
@@ -198,7 +206,7 @@ func processLineIntoWords(line []indexedText) []word {
 		}
 
 		// Deduplication (Geometric Fix)
-		// We avoid aggressive deduplication because it often collapses legitimate 
+		// We avoid aggressive deduplication because it often collapses legitimate
 		// double letters in low-quality or uniquely encoded PDFs.
 		// Modern PDF libraries like ledongthuc/pdf often handle basic deduplication.
 
@@ -234,21 +242,7 @@ func processLineIntoWords(line []indexedText) []word {
 	return words
 }
 
-func calculateOverlap(x1, w1, x2, w2 float64) float64 {
-	// Intersection over Union (IoU) simplified for 1D
-	end1 := x1 + w1
-	end2 := x2 + w2
-	intersectStart := math.Max(x1, x2)
-	intersectEnd := math.Min(end1, end2)
-	intersection := math.Max(0, intersectEnd-intersectStart)
-	if intersection == 0 {
-		return 0
-	}
-	union := math.Max(end1, end2) - math.Min(x1, x2)
-	return intersection / union
-}
-
-func calculateStdDev(values []float64) float64 {
+func calculateMean(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -256,7 +250,14 @@ func calculateStdDev(values []float64) float64 {
 	for _, v := range values {
 		sum += v
 	}
-	mean := sum / float64(len(values))
+	return sum / float64(len(values))
+}
+
+func calculateStdDev(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	mean := calculateMean(values)
 	var sqSum float64
 	for _, v := range values {
 		sqSum += math.Pow(v-mean, 2)
@@ -276,33 +277,33 @@ func sortLineByX(line []indexedText) {
 }
 
 func calculateMedian(values []float64) float64 {
-	if len(values) == 0 {
+	n := len(values)
+	if n == 0 {
 		return 0
 	}
-	sorted := make([]float64, len(values))
+	sorted := make([]float64, n)
 	copy(sorted, values)
 	sort.Float64s(sorted)
-	return sorted[len(sorted)/2]
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
 }
 
 // sanitizeText cleans up common PDF extraction artifacts like ligatures and non-printable characters.
 func sanitizeText(s string) string {
-	// 1. Normalize common ligatures and PUA characters
+	// 1. Apply NFKC normalization to resolve common ligatures (fi, fl) and PUA characters (G4)
+	s = norm.NFKC.String(s)
+
+	// 2. Explicitly handle problematic PDF-specific artifacts that NFKC might miss
 	r := strings.NewReplacer(
-		"ﬁ", "fi",
-		"ﬂ", "fl",
-		"ﬀ", "ff",
-		"ﬃ", "ffi",
-		"ﬄ", "ffl",
-		"ﬆ", "st",
-		"ﬅ", "ft",
 		"\ufffd", "", // Generic replacement char
 		"\u0000", "", // Null
 		"\uFEFF", "", // BOM
 	)
 	s = r.Replace(s)
 
-	// 2. Remove non-printable characters but keep standard whitespace
+	// 3. Remove non-printable characters but keep standard whitespace
 	return strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\t' || r == '\r' || r >= 32 {
 			return r
