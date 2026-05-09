@@ -23,7 +23,9 @@ func TestQA_GoldenMaster(t *testing.T) {
 
 	testdataDir := "../../testdata/devops_project"
 	goldenDir := filepath.Join(testdataDir, "golden")
-	os.MkdirAll(goldenDir, 0755)
+	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+		t.Fatalf("Failed to create golden dir: %v", err)
+	}
 
 	cfg := domain.NewConfig()
 	cfg.StripNoise = true
@@ -65,4 +67,3 @@ func TestQA_GoldenMaster(t *testing.T) {
 		})
 	}
 }
-
