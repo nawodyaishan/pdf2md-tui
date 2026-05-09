@@ -89,8 +89,10 @@ var convertCmd = &cobra.Command{
 		cfg.DateFormat = dateFormat
 		cfg.StripNoise = stripNoise
 		cfg.ExtractImages = extractImages
+		cfg.EntropyThreshold = entropyThresh
 
 		store := storage.NewStorage()
+
 		parser := pdf.NewParser()
 		tokenCount, _ := pdf.NewTokenizer()
 		conv := service.NewConverterService(cfg, store, parser, tokenCount)

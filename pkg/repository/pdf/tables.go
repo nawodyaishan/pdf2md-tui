@@ -401,9 +401,14 @@ func assignCellsToColumns(cells []tableCell, columns []float64) []string {
 	return result
 }
 
+// Page abstracts the necessary methods for PDF content extraction.
+type Page interface {
+	Content() ledongpdf.Content
+}
+
 // extractPageBlocks uses positional text data to detect table structures and text blocks.
 // Returns a slice of PageBlocks representing the structured content of the page.
-func extractPageBlocks(page ledongpdf.Page) []domain.PageBlock {
+func extractPageBlocks(page Page) []domain.PageBlock {
 	content := page.Content()
 	if len(content.Text) == 0 {
 		return nil
