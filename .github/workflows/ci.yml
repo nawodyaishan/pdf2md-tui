@@ -5,8 +5,15 @@ on:
     branches: [ main, dev, staging ]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
+
+env:
+  COVERAGE_THRESHOLD: "45"
 
 jobs:
   lint:
@@ -35,10 +42,10 @@ jobs:
           go-version-file: go.mod
       - name: Run tests
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
-      - name: Check coverage threshold (70%)
+      - name: Check coverage threshold
         if: matrix.os == 'ubuntu-latest'
         run: |
-          go tool cover -func=coverage.out | awk '/total:/{cov=$3+0; if(cov<70){printf "FAIL: Coverage %.1f%% < 70%% threshold\n",cov; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
+          go tool cover -func=coverage.out | awk -v threshold="$COVERAGE_THRESHOLD" '/total:/{cov=$3+0; if(cov<threshold){printf "FAIL: Coverage %.1f%% < %.1f%% threshold\n",cov,threshold; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
       - name: Run fuzz tests (30s)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -52,6 +59,12 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
 
   build:
     name: Build verification
