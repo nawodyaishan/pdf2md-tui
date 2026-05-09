@@ -54,7 +54,29 @@
 
 ---
 
-## Installation
+## 🚀 Recent Quality Improvements
+
+We've recently overhauled the core extraction engine to move beyond simple text scraping toward **semantic document reconstruction**. These changes ensure that the output Markdown is truly RAG-ready and "chunking-safe."
+
+### 🏗️ Advanced Extraction Engine (v1.2.7+)
+- **Adaptive Spacing Heuristics:** Uses line-level gap statistics (Mean/StdDev) to correctly coalesce intentionally tracked headings (e.g., `D E F I N I T I V E`) into single words while maintaining natural word separation.
+- **Double-Letter Preservation:** Disabled aggressive character deduplication in favor of a content-first strategy. Legitimate double letters (e.g., `across`, `ebooks`, `www`) are now perfectly preserved across all document sources.
+- **Block-Aware Optimization:** Refactored the `--strip-noise` pipeline. Whitespace collapsing is now scoped to individual blocks, strictly preserving paragraph boundaries (`\n\n`) and table structures.
+- **Standardized Unicode:** Integrated `norm.NFKC` for industry-standard normalization. All extracted text now features consistent resolution of ligatures (`fi`, `fl`, etc.) and PUA characters.
+
+### ✅ Automated QA Validation
+To ensure long-term scalability and prevent regressions, we implemented a formal [QA Test Plan](docs/specs/qa_test_plan.md) with an automated validation suite (`pkg/service/qa_validation_test.go`). 
+
+**Core Assertions Verified:**
+- **Content Fidelity:** Zero collapse of legitimate double letters.
+- **Structural Integrity:** Guaranteed minimum paragraph density in optimized output.
+- **Semantic Coherence:** Coalescing of styled headings and specialized technical symbols (`→`, `•`).
+- **Cleanliness:** Zero-tolerance policy for replacement characters (`U+FFFD`) and "garbage" encoding sequences.
+
+---
+
+## 📦 Installation
+
 
 ### Homebrew (macOS and Linux)
 

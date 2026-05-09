@@ -48,6 +48,7 @@ Thumbs.db
 debug-pdf
 internal-docs/
 testdata/
+md/
 
 # Environment & secrets
 .env
@@ -55,3 +56,4 @@ testdata/
 *.pem
 *.key
 pdf2md.log
+GEMINI.md
