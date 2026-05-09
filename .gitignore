@@ -45,10 +45,10 @@ ehthumbs.db
 Thumbs.db
 
 # Project Specific
-debug-pdf
+/debug-pdf
 internal-docs/
 md/
-testdata/
+/testdata/
 !testdata/devops_project/golden/*.golden.md
 
 # Environment & secrets
