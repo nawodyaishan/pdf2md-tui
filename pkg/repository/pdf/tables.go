@@ -13,8 +13,8 @@ import (
 const (
 	tableMinColumnGap     = 50.0 // minimum gap between columns in points (~0.7 inches)
 	tableYRowTolerance    = 3.0  // Y-coordinate proximity to group words into the same row
-	tableMinCols          = 3    // minimum number of columns to be considered a table
-	tableColumnFreqThresh = 0.4  // percentage of rows a column must appear in to be valid
+	tableMinCols          = 2    // minimum number of columns to be considered a table
+	tableColumnFreqThresh = 0.3  // percentage of rows a column must appear in to be valid
 	tableBucketSize       = 5.0  // bucket size for grouping X-coordinates
 
 	charYToleranceLineMerge = 1.0 // Y-tolerance to group characters into the same line

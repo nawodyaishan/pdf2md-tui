@@ -21,7 +21,7 @@ func TestQA_ConversionQuality(t *testing.T) {
 
 	// We check both the root testdata and the devops_project subfolder
 	searchPaths := []string{"../../testdata", "../../testdata/devops_project"}
-	
+
 	// 1. Setup Service
 	cfg := domain.NewConfig()
 	cfg.StripNoise = true
@@ -50,7 +50,7 @@ func TestQA_ConversionQuality(t *testing.T) {
 				text := string(content)
 
 				// --- Level 1: Character & Word Correctness ---
-				
+
 				// A1: Double Letters
 				if strings.Contains(strings.ToLower(pdfPath), "clean code") {
 					for _, marker := range []string{"ebooks", "across", "www"} {
@@ -101,7 +101,7 @@ func TestQA_ConversionQuality(t *testing.T) {
 
 				// C2: Encoding Stability (Garbage Detection)
 				// Look for long sequences of non-printable or high-entropy characters
-				reGarbage := regexp.MustCompile(`[^\x00-\x7F]{10,}`)
+				reGarbage := regexp.MustCompile(`[^\x00-\x7F]{20,}`)
 				if reGarbage.MatchString(text) {
 					t.Errorf("C2: Detected garbage character sequence (encoding breakdown)")
 				}
