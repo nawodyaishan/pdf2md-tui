@@ -61,6 +61,27 @@ func TestRenderMarkdown_TableFencing(t *testing.T) {
 	}
 }
 
+func TestOutputPath(t *testing.T) {
+	cfg := domain.NewConfig()
+	cfg.DateFormat = "2006-01-02"
+	svc := NewConverterService(cfg, &mockStorage{writes: make(map[string][]byte)}, &mockParser{}, nil)
+
+	testPath := "/path/to/document.pdf"
+	outDir := "/output"
+
+	result := svc.OutputPath(testPath, outDir)
+
+	if !strings.Contains(result, "document") {
+		t.Errorf("OutputPath should contain document name, got %q", result)
+	}
+	if !strings.Contains(result, ".md") {
+		t.Errorf("OutputPath should have .md extension, got %q", result)
+	}
+	if !strings.Contains(result, outDir) {
+		t.Errorf("OutputPath should contain output dir %q, got %q", outDir, result)
+	}
+}
+
 // Mocks
 
 type mockStorage struct {
