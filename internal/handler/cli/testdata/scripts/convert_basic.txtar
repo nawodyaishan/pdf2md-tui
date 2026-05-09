@@ -1,0 +1,10 @@
+# Test: Basic PDF conversion produces markdown output
+# This test verifies the core convert command works end-to-end
+
+exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output markdown_out --force
+stdout '"converted"'
+! stderr .
+
+# Verify at least one markdown file was created in the input directory
+exec find $TESTDATA_DIR/devops_project/markdown_out -name '*.md'
+stdout '.md'
