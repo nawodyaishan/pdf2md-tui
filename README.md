@@ -73,7 +73,7 @@ No cloud API, no GPU, no Python environment — just a single Go binary.
 
 ```bash
 brew tap nawodyaishan/tap
-brew install pdf2md-tui
+brew install --cask pdf2md-tui
 ```
 
 ### Go install

@@ -28,10 +28,12 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -46,26 +48,28 @@ changelog:
       - '^ci:'
       - '^chore:'
 
-# Homebrew Tap Formula
-brews:
-  - repository:
+# Homebrew Cask
+homebrew_casks:
+  - name: pdf2md-tui
+    ids:
+      - default
+    binaries:
+      - pdf2md-tui
+    repository:
       owner: nawodyaishan
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/nawodyaishan/pdf2md-tui"
     description: "High-performance TUI tool for batch PDF to LLM-friendly Markdown conversion"
     license: "MIT"
-    test: |
-      system "#{bin}/pdf2md-tui", "version"
-    install: |
-      bin.install "pdf2md-tui"
 
 # nFPM for deb/rpm packages (bonus)
 nfpms:
   - id: packages
     package_name: pdf2md-tui
     vendor: nawodyaishan
+    maintainer: "nawodyaishan <nawodyaishan@users.noreply.github.com>"
     homepage: https://github.com/nawodyaishan/pdf2md-tui
     description: "Batch PDF to LLM-optimized Markdown converter with TUI progress"
     license: MIT
