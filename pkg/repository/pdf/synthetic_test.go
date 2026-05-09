@@ -1,9 +1,9 @@
 package pdf
 
 import (
-	"testing"
-	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 	"github.com/ledongthuc/pdf"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+	"testing"
 )
 
 func TestExtractPageBlocks_SyntheticTable(t *testing.T) {
