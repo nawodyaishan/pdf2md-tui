@@ -115,43 +115,72 @@ func TestDebugPdfValidPDF(t *testing.T) {
 **Target**: 60%+  
 **Effort**: High (requires snapshot testing or view output comparison)
 
-### 4.2.1 Snapshot/Golden Tests
+### 4.2.1 Model Update & View Tests (Bubble Tea Pattern)
 
-Create `internal/handler/tui/dashboard_render_golden_test.go`:
+Create `internal/handler/tui/model_integration_test.go` (extends existing `model_test.go`):
 
 ```go
 package tui
 
 import (
+	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
-func TestRenderDashboard_GoldenSnapshot(t *testing.T) {
-	model := NewModel()
-	model.results = []domain.Result{
-		{InputPath: "test.pdf", Status: domain.StatusOK},
+func TestModelUpdateProcessesMessages(t *testing.T) {
+	m := NewModel()
+	
+	// Simulate keyboard input via tea.KeyMsg
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	updated, cmd := m.Update(msg)
+	
+	// Verify state changed (e.g., quit flag set)
+	if _, ok := updated.(tea.Model); !ok {
+		t.Fatal("Update should return a Model")
 	}
-	
-	view := model.View()
-	
-	// Compare against golden file
-	// testdata/golden/dashboard_view.txt
-	if err := compareGolden(t, view); err != nil {
-		t.Errorf("rendering mismatch: %v", err)
+	if cmd == nil && !m.shouldExit {
+		t.Error("expected quit command or state change")
 	}
 }
 
-func TestRenderStats_StatsFormat(t *testing.T) {
-	// Test the stats section rendering
-	// Verify ANSI codes, alignment
+func TestModelViewRenders(t *testing.T) {
+	m := NewModel()
+	m.results = []domain.Result{
+		{InputPath: "test.pdf", Status: domain.StatusOK, InputBytes: 1024},
+	}
+	
+	view := m.View()
+	
+	// Verify rendered output contains expected content
+	if !strings.Contains(view, "test.pdf") {
+		t.Errorf("View should contain file name, got: %s", view)
+	}
+	if len(view) == 0 {
+		t.Fatal("View should not be empty")
+	}
 }
 
-func TestRenderProgressBar_AnimationFrames(t *testing.T) {
-	// Test progress bar at 0%, 50%, 100%
+func TestModelViewHeaderFooter(t *testing.T) {
+	m := NewModel()
+	view := m.View()
+	
+	// Test header rendering (from model.go:212)
+	if !strings.Contains(view, "pdf2md-tui") {
+		t.Error("header should display app name")
+	}
+	
+	// Test footer rendering (from model.go:237)
+	if !strings.Contains(view, "q") && !strings.Contains(view, "quit") {
+		t.Error("footer should show quit instruction")
+	}
 }
 ```
+
+**Pattern Reference**: [Bubble Tea Model Interface](https://pkg.go.dev/github.com/charmbracelet/bubbletea#Model)  
+Extracted from `/websites/pkg_go_dev_github_com_charmbracelet_bubbletea` (Source Reputation: High)
 
 **Files to create:**
 - `internal/handler/tui/golden_test.go` - helper for snapshot testing
