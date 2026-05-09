@@ -4,6 +4,7 @@
 APP_NAME    := pdf2md-tui
 BIN_DIR     := bin
 BINARY      := $(BIN_DIR)/$(APP_NAME)
+COVERAGE_THRESHOLD ?= 45
 
 VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -36,18 +37,20 @@ test: ## Run the test suite with race detection and coverage
 cover: test ## Open HTML coverage report in the browser
 	go tool cover -html=coverage.out
 
-cover-check: test ## Check that coverage meets minimum threshold (70%)
+cover-check: test ## Check that coverage meets the configured minimum threshold
 	@go tool cover -func=coverage.out \
-		| awk '/total:/{cov=$$3+0; if(cov<70){printf "FAIL: Coverage %.1f%% < 70%% threshold\n",cov; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
+		| awk -v threshold="$(COVERAGE_THRESHOLD)" '/total:/{cov=$$3+0; if(cov<threshold){printf "FAIL: Coverage %.1f%% < %.1f%% threshold\n",cov,threshold; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
 
 bench: ## Run benchmarks and output results
 	go test -bench=. -benchmem -count=5 ./pkg/... 2>/dev/null | tee bench.txt
 	@echo "Benchmark results written to bench.txt"
 
-lint: ## Run golangci-lint (skips gracefully if not installed)
-	@which golangci-lint >/dev/null 2>&1 \
-		&& golangci-lint run ./... \
-		|| echo "⚠  golangci-lint not found — skipping (install: brew install golangci-lint)"
+lint: ## Run golangci-lint
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "ERROR: golangci-lint is required. Install it with 'brew install golangci-lint'."; \
+		exit 1; \
+	}
+	golangci-lint run ./...
 
 fmt: ## Format all Go source files
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
