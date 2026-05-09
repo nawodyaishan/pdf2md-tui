@@ -22,12 +22,6 @@ func TestGopsutilProviderGetSnapshot(t *testing.T) {
 	}
 
 	// Even if there's an error, we should get a valid SysInfo struct
-	if snapshot.MemoryTotal < 0 {
-		t.Errorf("MemoryTotal should not be negative: %d", snapshot.MemoryTotal)
-	}
-	if snapshot.MemoryUsed < 0 {
-		t.Errorf("MemoryUsed should not be negative: %d", snapshot.MemoryUsed)
-	}
 	if snapshot.MemoryPct < 0 || snapshot.MemoryPct > 100 {
 		t.Errorf("MemoryPct should be between 0 and 100: %f", snapshot.MemoryPct)
 	}

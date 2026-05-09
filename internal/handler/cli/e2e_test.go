@@ -5,12 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rogpeppe/go-internal/testscript"
 	"github.com/nawodyaishan/pdf2md-tui/internal/handler/cli"
+	"github.com/rogpeppe/go-internal/testscript"
 )
 
 // TestMain registers the pdf2md-tui command for use in testscript scenarios
 func TestMain(m *testing.M) {
+	//nolint:staticcheck // testscript.RunMain is the standard pattern for this library
 	os.Exit(testscript.RunMain(m, map[string]func() int{
 		"pdf2md-tui": func() int {
 			if err := cli.Execute(); err != nil {

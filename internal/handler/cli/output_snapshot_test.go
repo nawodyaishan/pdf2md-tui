@@ -125,9 +125,9 @@ func TestTextSummaryWithErrors(t *testing.T) {
 	}
 
 	totals := conversionTotals{
-		converted:   0,
-		errCount:    2,
-		duration:    2 * time.Second,
+		converted: 0,
+		errCount:  2,
+		duration:  2 * time.Second,
 	}
 
 	sys := domain.SysInfo{}

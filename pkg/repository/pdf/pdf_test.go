@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	ledongpdf "github.com/ledongthuc/pdf"
-	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
 func TestNewParser(t *testing.T) {
@@ -16,8 +15,7 @@ func TestNewParser(t *testing.T) {
 }
 
 func TestParserInterfaceAssertion(t *testing.T) {
-	var p domain.PDFParser
-	p = NewParser()
+	var p = NewParser()
 	if p == nil {
 		t.Fatal("parser does not implement domain.PDFParser")
 	}

@@ -9,14 +9,14 @@ import (
 // Run with: go test -fuzz=FuzzApplyLLMOptimizations -fuzztime=30s ./pkg/service/
 func FuzzApplyLLMOptimizations(f *testing.F) {
 	// Seed corpus: realistic inputs that exercise the regex paths
-	f.Add("Hello     World\n\n\nTesting")           // Multiple spaces + newlines
-	f.Add("Page 123\n456\nContent")                 // Isolated numbers (page markers)
-	f.Add("Normal paragraph with text.")            // No optimization needed
-	f.Add("")                                        // Empty string
-	f.Add("\n\n\n")                                 // Only newlines
-	f.Add("  \t  ")                                 // Only whitespace
-	f.Add("A" + string(rune(0)) + "B")             // Null byte
-	f.Add("Café\nmuléñez")                         // Unicode: accented chars
+	f.Add("Hello     World\n\n\nTesting") // Multiple spaces + newlines
+	f.Add("Page 123\n456\nContent")       // Isolated numbers (page markers)
+	f.Add("Normal paragraph with text.")  // No optimization needed
+	f.Add("")                             // Empty string
+	f.Add("\n\n\n")                       // Only newlines
+	f.Add("  \t  ")                       // Only whitespace
+	f.Add("A" + string(rune(0)) + "B")    // Null byte
+	f.Add("Café\nmuléñez")                // Unicode: accented chars
 
 	f.Fuzz(func(t *testing.T, input string) {
 		out1 := applyLLMOptimizations(input)

@@ -39,9 +39,9 @@ func TestTruncatePathPreservesContent(t *testing.T) {
 
 func TestFormatDurationDisplay(t *testing.T) {
 	tests := []struct {
-		name       string
-		duration   time.Duration
-		checkFunc  func(string) bool
+		name      string
+		duration  time.Duration
+		checkFunc func(string) bool
 	}{
 		{"milliseconds", 100 * time.Millisecond, func(s string) bool { return len(s) > 0 }},
 		{"second", 1 * time.Second, func(s string) bool { return strings.Contains(s, "s") }},

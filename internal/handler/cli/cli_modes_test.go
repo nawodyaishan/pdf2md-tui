@@ -45,9 +45,9 @@ func TestPrintTextSummaryFormat(t *testing.T) {
 	}
 
 	sys := domain.SysInfo{
-		CPUUsage:    45.5,
-		MemoryUsed:  512000000,
-		MemoryPct:   25.5,
+		CPUUsage:   45.5,
+		MemoryUsed: 512000000,
+		MemoryPct:  25.5,
 	}
 
 	buf := &bytes.Buffer{}
@@ -92,9 +92,9 @@ func TestPrintTextSummaryWithErrors(t *testing.T) {
 	}
 
 	totals := conversionTotals{
-		converted:   0,
-		errCount:    1,
-		duration:    1 * time.Second,
+		converted: 0,
+		errCount:  1,
+		duration:  1 * time.Second,
 	}
 
 	sys := domain.SysInfo{}
