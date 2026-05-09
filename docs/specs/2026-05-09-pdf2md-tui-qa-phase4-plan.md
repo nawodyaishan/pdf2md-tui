@@ -357,36 +357,72 @@ type MockTerminal struct {
 **Target**: 75%+  
 **Effort**: Medium
 
-### 4.4.1 Non-Interactive Mode Tests
+### 4.4.1 Non-Interactive Path Tests
 
-Create `internal/handler/cli/cli_modes_test.go`:
+Create `internal/handler/cli/cli_modes_test.go` covering untested functions from `root.go` and `convert.go`:
 
 ```go
-func TestTextSummaryOutputFormat(t *testing.T) {
-	// printTextSummary() - currently 0% coverage
-	// Mock stdout, verify formatting
-}
+package cli
 
-func TestOpenDirectoryCommand(t *testing.T) {
-	// openDir() - currently 0% coverage
-	// Mock exec.Command, verify dir open invoked
-}
+import (
+	"bytes"
+	"os"
+	"testing"
 
-func TestClearTerminalANSICodes(t *testing.T) {
-	// clearTerminal() - currently 0% coverage
-	// Verify ANSI escape codes emitted
+	"github.com/spf13/cobra"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+)
+
+func TestPrintTextSummaryFormat(t *testing.T) {
+	// From convert.go:386 - printTextSummary()
+	// Test non-quiet mode output formatting
+	buf := &bytes.Buffer{}
+	results := []domain.Result{
+		{InputPath: "a.pdf", Status: domain.StatusOK, OutputBytes: 1024},
+	}
+	// Mock output destination
+	printTextSummary(buf, results)
+	
+	if buf.Len() == 0 {
+		t.Fatal("text summary should produce output")
+	}
 }
 
 func TestAnyFlagChangedDetection(t *testing.T) {
-	// anyFlagChanged() - currently 0% coverage
-	// Test flag comparison logic
+	// From root.go:74 - anyFlagChanged()
+	// Test flag state comparison logic
+	cmd := &cobra.Command{}
+	cmd.Flags().BoolP("strip-noise", "", false, "")
+	cmd.Flags().Parse([]string{"--strip-noise"})
+	
+	changed := anyFlagChanged(cmd)
+	if !changed {
+		t.Error("should detect changed flag")
+	}
 }
 
 func TestRunInteractiveMenuFlow(t *testing.T) {
-	// runInteractiveMenu() - currently 0% coverage
-	// Mock user selections, verify config applied
+	// From root.go:83 - runInteractiveMenu()
+	// This function calls tui.ShowMainMenu() which is hard to mock
+	// Strategy: Create testable wrapper with dependency injection
+	
+	// Mock tui.ShowMainMenu result
+	mockAction := "convert"
+	mockCfg := domain.NewConfig()
+	mockCfg.Directory = "/test"
+	
+	// After refactoring runInteractiveMenu to accept ShowMenu function:
+	// cmd := &cobra.Command{}
+	// err := runInteractiveMenuWithMock(cmd, func() (string, *domain.Config, error) {
+	//     return mockAction, mockCfg, nil
+	// })
 }
 ```
+
+**Source references** (via codegraph):
+- `runInteractiveMenu()`: internal/handler/cli/root.go:83
+- `anyFlagChanged()`: internal/handler/cli/root.go:74  
+- `printTextSummary()`: internal/handler/cli/convert.go:386
 
 **Files needed:**
 - Mock exec.Command for openDir()
