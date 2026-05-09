@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -48,26 +49,6 @@ type tableCell struct {
 type indexedText struct {
 	ledongpdf.Text
 	index int
-}
-
-// extractPageBlocks uses positional text data to detect table structures and text blocks.
-// Returns a slice of PageBlocks representing the structured content of the page.
-func extractPageBlocks(page ledongpdf.Page) []domain.PageBlock {
-	content := page.Content()
-	if len(content.Text) == 0 {
-		return nil
-	}
-
-	words := coalesceChars(content.Text)
-	if len(words) == 0 {
-		return nil
-	}
-
-	// Group words into rows by Y coordinate
-	rows := groupIntoRows(words, tableYRowTolerance)
-
-	// Detect column positions across rows to find table regions and build blocks
-	return buildPageBlocks(rows)
 }
 
 // coalesceChars merges individual characters into words based on X proximity and Y alignment.
@@ -420,6 +401,26 @@ func assignCellsToColumns(cells []tableCell, columns []float64) []string {
 	return result
 }
 
+// extractPageBlocks uses positional text data to detect table structures and text blocks.
+// Returns a slice of PageBlocks representing the structured content of the page.
+func extractPageBlocks(page ledongpdf.Page) []domain.PageBlock {
+	content := page.Content()
+	if len(content.Text) == 0 {
+		return nil
+	}
+
+	words := coalesceChars(content.Text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	// Group words into rows by Y coordinate
+	rows := groupIntoRows(words, tableYRowTolerance)
+
+	// Detect column positions across rows to find table regions and build blocks
+	return buildPageBlocks(rows)
+}
+
 // buildPageBlocks converts rows to PageBlocks, detecting tables.
 func buildPageBlocks(rows []tableRow) []domain.PageBlock {
 	var blocks []domain.PageBlock
@@ -469,8 +470,19 @@ func buildPageBlocks(rows []tableRow) []domain.PageBlock {
 	return blocks
 }
 
-// extractColumnClusters extracts distinct X positions from a slice of cells,
-// grouping those that are closer than minGap.
+// ValidateTableStructure enforces row-column consistency.
+func ValidateTableStructure(table domain.TableData) error {
+	if len(table.Rows) == 0 {
+		return nil
+	}
+	expectedCols := len(table.Rows[0])
+	for i, row := range table.Rows {
+		if len(row) != expectedCols {
+			return fmt.Errorf("row %d has %d columns, expected %d", i, len(row), expectedCols)
+		}
+	}
+	return nil
+}
 func extractColumnClusters(cells []tableCell, minGap float64) []float64 {
 	var clusters []float64
 	for _, cell := range cells {
