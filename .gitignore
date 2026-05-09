@@ -47,8 +47,9 @@ Thumbs.db
 # Project Specific
 debug-pdf
 internal-docs/
-testdata/
 md/
+testdata/
+!testdata/devops_project/golden/*.golden.md
 
 # Environment & secrets
 .env

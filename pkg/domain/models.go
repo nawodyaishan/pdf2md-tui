@@ -16,15 +16,16 @@ const (
 
 // Result holds metrics and results of a conversion.
 type Result struct {
-	InputPath    string
-	OutputPath   string
-	InputBytes   int64
-	OutputBytes  int64
-	InputTokens  int
-	OutputTokens int
-	Duration     time.Duration
-	Status       Status
-	Err          error
+	InputPath        string
+	OutputPath       string
+	InputBytes       int64
+	OutputBytes      int64
+	InputTokens      int
+	OutputTokens     int
+	Duration         time.Duration
+	Status           Status
+	Err              error
+	StructuralErrors []string
 }
 
 // ExtractedImage tracks an image saved to disk.
