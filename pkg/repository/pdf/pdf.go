@@ -7,6 +7,9 @@ import (
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
 )
 
+// Compile-time assertion: parser implements domain.PDFParser
+var _ domain.PDFParser = (*parser)(nil)
+
 type parser struct{}
 
 // NewParser creates a new PDF parser instance.
