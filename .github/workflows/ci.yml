@@ -16,6 +16,25 @@ env:
   COVERAGE_THRESHOLD: "45"
 
 jobs:
+  # Fast checks — run first (1 min total)
+  format:
+    name: Format & Vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          if [ -n "$(gofmt -l ./...)" ]; then
+            echo "❌ Code not formatted. Run: make fmt"
+            gofmt -l ./...
+            exit 1
+          fi
+      - name: Run go vet
+        run: go vet ./...
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -27,9 +46,12 @@ jobs:
       - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.9.0
+          args: --timeout=5m
 
+  # Test job — can run in parallel with security
   test:
     name: Test (${{ matrix.os }})
+    needs: [ format, lint ]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,35 +62,63 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Run tests
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
-      - name: Check coverage threshold
-        if: matrix.os == 'ubuntu-latest'
+
+      - name: Run tests with race detector
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      # Coverage gate (ubuntu only, authoritative)
+      - if: matrix.os == 'ubuntu-latest'
+        name: Check coverage baseline
         run: |
-          go tool cover -func=coverage.out | awk -v threshold="$COVERAGE_THRESHOLD" '/total:/{cov=$3+0; if(cov<threshold){printf "FAIL: Coverage %.1f%% < %.1f%% threshold\n",cov,threshold; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 45" | bc -l) )); then
+            echo "❌ Coverage ${COVERAGE}% below clean-checkout baseline (45%)"
+            exit 1
+          fi
+          echo "✅ Coverage ${COVERAGE}% meets baseline"
+
       - name: Run fuzz tests (30s)
         if: matrix.os == 'ubuntu-latest'
         run: |
           go test -fuzz=FuzzCoalesceChars -fuzztime=30s ./pkg/repository/pdf/
           go test -fuzz=FuzzApplyLLMOptimizations -fuzztime=30s ./pkg/service/
-      - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest'
+
+      # Upload coverage (ubuntu only)
+      - if: matrix.os == 'ubuntu-latest'
+        name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
           files: coverage.out
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      - name: Upload coverage artifact
-        if: matrix.os == 'ubuntu-latest'
+
+      - if: matrix.os == 'ubuntu-latest'
+        name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.out
 
+  # Security scan (can run in parallel with test)
+  security:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # Build validation (after test passes)
   build:
     name: Build verification
-    needs: [ lint, test ]
+    needs: [ test ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
