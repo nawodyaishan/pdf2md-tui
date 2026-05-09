@@ -5,7 +5,7 @@ import (
 )
 
 // CalculateShannonEntropy measures the information density of text blocks.
-// High entropy in text blocks often indicates corrupted/garbage encoding.
+// High entropy (e.g., > 4.5 bits/char) in text blocks often indicates corrupted/garbage encoding.
 func CalculateShannonEntropy(data string) float64 {
 	if data == "" {
 		return 0

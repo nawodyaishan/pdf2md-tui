@@ -3,9 +3,11 @@ package domain
 // Config holds the extraction and processing settings.
 type Config struct {
 	DateFormat    string
-	StripNoise    bool
-	ExtractImages bool
-	Workers       int
+	StripNoise       bool
+	ExtractImages    bool
+	EntropyThreshold float64
+	Workers          int
+
 	Recursive     bool
 	Force         bool
 	Verbose       bool

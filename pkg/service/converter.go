@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
+	"github.com/nawodyaishan/pdf2md-tui/pkg/repository/pdf"
 )
 
 // ConverterService handles the PDF to MD conversion settings and orchestration.
@@ -93,7 +94,18 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 			}
 		}
 
-		text := renderMarkdown(blocks, c.config.StripNoise)
+		var filteredBlocks []domain.PageBlock
+		for _, b := range blocks {
+			if b.Type == domain.BlockTypeText && c.config.EntropyThreshold > 0 {
+				entropy := pdf.CalculateShannonEntropy(b.Text)
+				if entropy > c.config.EntropyThreshold {
+					continue
+				}
+			}
+			filteredBlocks = append(filteredBlocks, b)
+		}
+
+		text := renderMarkdown(filteredBlocks, c.config.StripNoise)
 
 		if strings.TrimSpace(text) != "" {
 			buf.WriteString(text)
