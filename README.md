@@ -99,6 +99,74 @@ Platforms: Linux, macOS, Windows × amd64 / arm64. Packages: `.tar.gz`, `.zip`, 
 
 ---
 
+## Development
+
+### Prerequisites
+
+Before cloning and developing, install the required tools:
+
+**Required:**
+- **Go 1.22+** — [Install](https://go.dev/dl)
+- **Lefthook** — Git hooks runner for code quality checks
+  ```bash
+  # macOS / Linux
+  brew install lefthook
+  
+  # Or via Go
+  go install github.com/evilmartians/lefthook/v2@v2.1.6
+  ```
+
+**Recommended:**
+- **golangci-lint** — Unified linter (optional if you only run tests)
+  ```bash
+  # macOS / Linux
+  brew install golangci-lint
+  
+  # Or via Go
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  ```
+
+**Why Lefthook?** It prevents commits that fail linting, formatting, or tests, catching issues before they reach CI.
+
+> **Note:** If lefthook isn't installed, commits will be blocked with a helpful error message. This is intentional and protects code quality.
+
+### Setup
+
+After cloning, run the setup script (recommended):
+
+```bash
+bash scripts/setup-dev.sh
+```
+
+Or manually:
+
+```bash
+# Install git hooks (runs on pre-commit and pre-push)
+make hooks-install
+
+# Or directly
+lefthook install
+```
+
+This will activate automated checks:
+- **pre-commit**: `gofmt`, `go vet`, `golangci-lint` on staged files
+- **pre-push**: full test suite + build validation
+
+> **Note:** Commits will be **blocked** if lefthook is not installed. This protects code quality by ensuring all commits pass linting before reaching CI.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `make test` | Run full test suite with race detector and coverage |
+| `make lint` | Run golangci-lint (requires lefthook/golangci-lint) |
+| `make vet` | Run go vet analysis |
+| `make fmt` | Format all Go files |
+| `make build` | Build binary to `bin/pdf2md-tui` |
+| `make cover` | Open HTML coverage report |
+
+---
+
 ## Usage
 
 ### Interactive Mode

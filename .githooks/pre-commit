@@ -1,0 +1,29 @@
+#!/bin/bash
+# Safety pre-commit hook: ensures lefthook is installed and active
+# This is a fallback if lefthook installation fails
+
+set -e
+
+# Check if lefthook is installed
+if ! command -v lefthook &> /dev/null; then
+    echo "❌ ERROR: lefthook is not installed"
+    echo ""
+    echo "lefthook is required for git hooks. Install it with:"
+    echo ""
+    echo "  brew install lefthook"
+    echo "  # OR"
+    echo "  go install github.com/evilmartians/lefthook/v2@v2.1.6"
+    echo ""
+    echo "Then run: make hooks-install"
+    echo ""
+    exit 1
+fi
+
+# Check if lefthook hooks are installed
+if [ ! -f ".git/hooks/pre-commit" ] || ! grep -q "lefthook" ".git/hooks/pre-commit" 2>/dev/null; then
+    echo "⚠️  Git hooks not properly installed. Running: lefthook install"
+    lefthook install
+fi
+
+# Run lefthook
+exec lefthook run pre-commit "$@"

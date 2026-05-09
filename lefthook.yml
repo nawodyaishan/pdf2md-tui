@@ -1,3 +1,7 @@
+# Git hooks configuration for pdf2md-tui
+# Install: make hooks-install OR lefthook install
+# This ensures all commits pass linting, formatting, and vet checks
+
 pre-commit:
   parallel: true
   jobs:
@@ -7,7 +11,14 @@ pre-commit:
       stage_fixed: true
 
     - name: golangci-lint
-      run: golangci-lint run {staged_files}
+      glob: "*.go"
+      run: |
+        if ! command -v golangci-lint &> /dev/null; then
+          echo "⚠️  golangci-lint not found. Install with: brew install golangci-lint"
+          echo "   Or: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+          exit 1
+        fi
+        golangci-lint run {staged_files}
 
     - name: go-vet
       glob: "*.go"
