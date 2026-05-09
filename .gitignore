@@ -58,3 +58,4 @@ testdata/
 *.key
 pdf2md.log
 GEMINI.md
+bench.txt

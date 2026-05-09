@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet tidy snapshot cover run clean release tag help \
+.PHONY: build test lint fmt vet tidy snapshot cover cover-check bench run clean release tag help \
 	check hooks-install hooks-run-pre-commit hooks-run-pre-push hooks-validate
 
 APP_NAME    := pdf2md-tui
@@ -36,6 +36,14 @@ test: ## Run the test suite with race detection and coverage
 cover: test ## Open HTML coverage report in the browser
 	go tool cover -html=coverage.out
 
+cover-check: test ## Check that coverage meets minimum threshold (70%)
+	@go tool cover -func=coverage.out \
+		| awk '/total:/{cov=$$3+0; if(cov<70){printf "FAIL: Coverage %.1f%% < 70%% threshold\n",cov; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
+
+bench: ## Run benchmarks and output results
+	go test -bench=. -benchmem -count=5 ./pkg/... 2>/dev/null | tee bench.txt
+	@echo "Benchmark results written to bench.txt"
+
 lint: ## Run golangci-lint (skips gracefully if not installed)
 	@which golangci-lint >/dev/null 2>&1 \
 		&& golangci-lint run ./... \
@@ -50,7 +58,7 @@ vet: ## Run go vet
 tidy: ## Tidy go.mod and go.sum
 	go mod tidy
 
-check: fmt vet lint test ## Run all quality checks (fmt, vet, lint, test)
+check: fmt vet lint test cover-check ## Run all quality checks (fmt, vet, lint, test, cover-check)
 
 hooks-install: ## Install Git hooks via Lefthook
 	@command -v lefthook >/dev/null 2>&1 || { \

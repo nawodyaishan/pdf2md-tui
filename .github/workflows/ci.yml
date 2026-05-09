@@ -35,6 +35,15 @@ jobs:
           go-version-file: go.mod
       - name: Run tests
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Check coverage threshold (70%)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go tool cover -func=coverage.out | awk '/total:/{cov=$3+0; if(cov<70){printf "FAIL: Coverage %.1f%% < 70%% threshold\n",cov; exit 1} else {printf "OK: Coverage %.1f%%\n",cov}}'
+      - name: Run fuzz tests (30s)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go test -fuzz=FuzzCoalesceChars -fuzztime=30s ./pkg/repository/pdf/
+          go test -fuzz=FuzzApplyLLMOptimizations -fuzztime=30s ./pkg/service/
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v5
@@ -57,3 +66,33 @@ jobs:
         run: go build -o ./bin/pdf2md-tui ./cmd/pdf2md-tui
       - name: Smoke test
         run: ./bin/pdf2md-tui version
+
+  benchmarks:
+    name: Benchmark regression detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run benchmarks (current PR)
+        run: go test -bench=. -benchmem -count=5 ./pkg/... | tee bench_pr.txt
+      - name: Checkout main branch
+        run: git fetch origin main && git checkout origin/main
+      - name: Run benchmarks (main baseline)
+        run: go test -bench=. -benchmem -count=5 ./pkg/... | tee bench_main.txt
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+      - name: Compare benchmarks
+        run: benchstat bench_main.txt bench_pr.txt
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            bench_pr.txt
+            bench_main.txt
+        if: always()
