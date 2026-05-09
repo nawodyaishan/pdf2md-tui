@@ -93,11 +93,7 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 			}
 		}
 
-		text := renderMarkdown(blocks)
-
-		if c.config.StripNoise {
-			text = applyLLMOptimizations(text)
-		}
+		text := renderMarkdown(blocks, c.config.StripNoise)
 
 		if strings.TrimSpace(text) != "" {
 			buf.WriteString(text)
@@ -147,33 +143,36 @@ func (c *ConverterService) OutputPath(pdfPath, outDir string) string {
 	return filepath.Join(outDir, filename)
 }
 
-// applyLLMOptimizations aggressively strips noise for LLM consumption.
+// applyLLMOptimizations aggressively strips noise from a text block for LLM consumption.
 func applyLLMOptimizations(text string) string {
-	// Remove isolated numbers (often page numbers) on their own line
+	// 1. Remove isolated numbers (often page numbers) on their own line
 	rePageNums := regexp.MustCompile(`(?m)^\s*\d+\s*$`)
 	text = rePageNums.ReplaceAllString(text, "")
 
-	// Collapse horizontal whitespace (spaces, tabs) but preserve newlines
+	// 2. Collapse horizontal whitespace (spaces, tabs) but preserve newlines
+	// This implements "horizontal whitespace collapsing within BlockTypeText" (G3)
 	reHorizontalSpaces := regexp.MustCompile(`[^\S\r\n]+`)
 	text = reHorizontalSpaces.ReplaceAllString(text, " ")
-
-	// Normalize multiple newlines to exactly \n\n for structural preservation (G2)
-	reVerticalSpaces := regexp.MustCompile(`\n{3,}`)
-	text = reVerticalSpaces.ReplaceAllString(text, "\n\n")
 
 	return strings.TrimSpace(text)
 }
 
 // renderMarkdown converts PageBlocks to markdown, detecting and formatting tables.
 // Implements Table Fencing (G2) by ensuring tables are surrounded by \n\n.
-func renderMarkdown(blocks []domain.PageBlock) string {
+func renderMarkdown(blocks []domain.PageBlock, stripNoise bool) string {
 	var buf strings.Builder
 
 	for _, block := range blocks {
 		switch block.Type {
 		case domain.BlockTypeText:
-			buf.WriteString(block.Text)
-			buf.WriteString("\n")
+			text := block.Text
+			if stripNoise {
+				text = applyLLMOptimizations(text)
+			}
+			if text != "" {
+				buf.WriteString(text)
+				buf.WriteString("\n")
+			}
 		case domain.BlockTypeTable:
 			buf.WriteString("\n\n") // Fencing: blank line before table
 
@@ -197,7 +196,13 @@ func renderMarkdown(blocks []domain.PageBlock) string {
 
 	// bindHeadersToParagraphs: ensure that Markdown headers are never separated from
 	// their immediately following paragraph by more than one newline.
-	// Regex: header line followed by excessive whitespace before next content
+	// This ensures "Explicitly preserve boundaries between PageBlock elements" (G3)
+	// while removing redundant line breaks introduced by extraction.
+	rendered := buf.String()
 	re := regexp.MustCompile(`(?m)(^#{1,6}\s+.+\n)\n+`)
-	return re.ReplaceAllString(buf.String(), "$1")
+	rendered = re.ReplaceAllString(rendered, "$1")
+
+	// Normalize multiple newlines to exactly \n\n for structural preservation (G2)
+	reVertical := regexp.MustCompile(`\n{3,}`)
+	return reVertical.ReplaceAllString(rendered, "\n\n")
 }

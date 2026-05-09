@@ -16,9 +16,9 @@ func TestApplyLLMOptimizations(t *testing.T) {
 		want string
 	}{
 		{
-			name: "collapse spaces but keep paragraphs",
+			name: "collapse spaces but keep vertical whitespace",
 			in:   "Hello     World\n\n\nTesting",
-			want: "Hello World\n\nTesting",
+			want: "Hello World\n\n\nTesting",
 		},
 		{
 			name: "remove isolated numbers (page numbers)",
@@ -51,9 +51,9 @@ func TestRenderMarkdown_TableFencing(t *testing.T) {
 		{Type: domain.BlockTypeText, Text: "After table"},
 	}
 
-	result := renderMarkdown(blocks)
+	result := renderMarkdown(blocks, false)
 
-	if !strings.Contains(result, "Before table\n\n\n| Col1") {
+	if !strings.Contains(result, "Before table\n\n| Col1") {
 		t.Errorf("table not fenced properly before: %q", result)
 	}
 	if !strings.Contains(result, "|\n\nAfter table") {
