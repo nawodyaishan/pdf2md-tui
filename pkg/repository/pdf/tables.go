@@ -260,7 +260,8 @@ func calculateStdDev(values []float64) float64 {
 	mean := calculateMean(values)
 	var sqSum float64
 	for _, v := range values {
-		sqSum += math.Pow(v-mean, 2)
+		sqSum += (v - mean) * (v - mean)
+
 	}
 	return math.Sqrt(sqSum / float64(len(values)))
 }
