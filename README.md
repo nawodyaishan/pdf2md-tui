@@ -97,7 +97,7 @@ Platforms: Linux, macOS, Windows × amd64 / arm64. Packages: `.tar.gz`, `.zip`, 
 Before cloning and developing, install the required tools:
 
 **Required:**
-- **Go 1.22+** — [Install](https://go.dev/dl)
+- **Go 1.26.3+** — [Install](https://go.dev/dl)
 - **Lefthook** — Git hooks runner for code quality checks
   ```bash
   # macOS / Linux
