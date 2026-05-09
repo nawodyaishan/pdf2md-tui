@@ -618,10 +618,39 @@ go test ./internal/handler/tui/...
 
 ---
 
+## Code Structure Analysis (via CodeGraph)
+
+### TUI Package Components (internal/handler/tui)
+
+| File | Symbols | Key Functions | Test Coverage |
+|------|---------|---|---|
+| model.go | 30 | NewModel, Init, Update, View, renderHeader, renderFooter | Partial (23.1%) |
+| dashboard_render.go | 32 | renderDashboard, renderStats, renderProgressBar, truncatePath, formatDuration | 0% |
+| progress.go | 29 | StartDiscovery, StopDiscovery, Increment, UpdateLiveStats, RunDashboard | 0% |
+| menu.go | 14 | ShowMainMenu, promptConvertConfig, ConfirmOverwrite, IsInteractive | 0% |
+| styles.go | 33 | Color constants, style builders | Partial |
+| model_test.go | 12 | Existing tests | — |
+
+**Key Finding**: 107 symbols, ~400 LOC across 6 files. Dashboard rendering (32 symbols, ~200 LOC) is lowest-hanging fruit for coverage.
+
+### CLI Package Components (internal/handler/cli)
+
+| File | Key Functions | Coverage | Notes |
+|------|---|---|---|
+| root.go | Execute, runInteractiveMenu, anyFlagChanged | 100%, 0%, 0% | Interactive menu needs refactoring for testability |
+| convert.go | Convert, printTextSummary, printJSONSummary, openDir, clearTerminal | 100%, 0%, 76.9%, 0%, 0% | CLI orchestration well-tested, output formatting not tested |
+| version.go | — | 100% | Already complete |
+
+**Key Finding**: Output formatting functions (printTextSummary) are pure functions, easily testable.
+
+---
+
 ## References
 
 - [Phase 3 Tech Spec](2026-05-09-pdf2md-tui-qa-3phase-tech-spec.md)
-- [Bubble Tea Testing Guide](https://github.com/charmbracelet/bubbletea/wiki/Testing)
+- **[Bubble Tea Model Interface](https://pkg.go.dev/github.com/charmbracelet/bubbletea#Model)** — Core testing pattern (Source Reputation: High)
+- **[Bubble Tea Framework](https://github.com/charmbracelet/bubbletea)** — Update/View methods testable in isolation
+- **[Bubble Tea Bubbles Components](https://github.com/charmbracelet/bubbles)** — v2.0.0, tested reference implementations
 - [Golden File Testing Pattern](https://en.wikipedia.org/wiki/Test_data#Golden_master)
 - [PTY Simulation for CLI Testing](https://github.com/traefik/yaegi/blob/master/internal/test/pty.go)
 
