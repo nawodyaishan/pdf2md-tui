@@ -55,7 +55,7 @@ Instead of outputting empty files for scanned PDFs, the tool detects image-only 
 Groundwork for the "Look Twice" VLM pipeline. Uses **`pdfcpu`** (pure Go, zero Cgo) to extract raw PDF images to an isolated `./images/{document}/` directory with deterministic naming (`page{N}_img{M}.png`). Injects `![image](images/doc/page1_img1.png)` references into the Markdown stream at correct positional offsets, maintaining spatial relationships for downstream chunkers.
 
 ### 🧱 Chunking-Safe Table Output
-**Status:** In Progress | **Goals:** G2 | **Label:** [`area/extraction`](https://github.com/nawodyaishan/pdf2md-tui/labels/area%2Fextraction)
+**Status:** Completed | **Goals:** G2 | **Label:** [`area/extraction`](https://github.com/nawodyaishan/pdf2md-tui/labels/area%2Fextraction)
 
 Ensure positional extraction emits GFM pipe tables as indivisible atomic units. Headers remain permanently bound to their subordinate paragraphs. This prevents modern hybrid chunkers (Docling `HybridChunker`, LlamaIndex) from destroying table integrity during vector embedding.
 
