@@ -48,22 +48,6 @@ changelog:
       - '^ci:'
       - '^chore:'
 
-# Homebrew Cask
-homebrew_casks:
-  - name: pdf2md-tui
-    ids:
-      - default
-    binaries:
-      - pdf2md-tui
-    repository:
-      owner: nawodyaishan
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Casks
-    homepage: "https://github.com/nawodyaishan/pdf2md-tui"
-    description: "High-performance TUI tool for batch PDF to LLM-friendly Markdown conversion"
-    license: "MIT"
-
 # nFPM for deb/rpm packages (bonus)
 nfpms:
   - id: packages

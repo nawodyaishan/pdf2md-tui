@@ -71,7 +71,7 @@ jobs:
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          test -n "$HOMEBREW_TAP_TOKEN" || { echo "HOMEBREW_TAP_TOKEN is required for tap publishing"; exit 1; }
+          test -n "$HOMEBREW_TAP_TOKEN" || { echo "HOMEBREW_TAP_TOKEN is required for Homebrew Formula publishing"; exit 1; }
 
       - name: Check GoReleaser config
         uses: goreleaser/goreleaser-action@v6
@@ -86,5 +86,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           GOVERSION: ${{ steps.setup-go.outputs.go-version }}
+
+      - name: Publish source-building Homebrew Formula
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: scripts/update-homebrew-formula.sh "${GITHUB_REF_NAME}"

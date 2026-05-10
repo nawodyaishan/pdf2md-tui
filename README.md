@@ -73,7 +73,14 @@ No cloud API, no GPU, no Python environment — just a single Go binary.
 
 ```bash
 brew tap nawodyaishan/tap
-brew install --cask pdf2md-tui
+brew install pdf2md-tui
+```
+
+If you previously installed the Cask-based package, migrate once:
+
+```bash
+brew uninstall --cask pdf2md-tui
+brew install pdf2md-tui
 ```
 
 ### Go install
