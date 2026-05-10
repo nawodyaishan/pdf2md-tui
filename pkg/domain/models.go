@@ -8,7 +8,7 @@ type Status int
 const (
 	// StatusOK indicates the document was converted successfully.
 	StatusOK Status = iota
-	// StatusIgnored indicates the document was skipped gracefully (e.g., requires OCR).
+	// StatusIgnored indicates the document was skipped gracefully during pre-flight.
 	StatusIgnored
 	// StatusError indicates the conversion failed unexpectedly.
 	StatusError

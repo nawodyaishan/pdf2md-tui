@@ -103,7 +103,9 @@ func (m *mockStorage) StatSize(path string) (int64, error) {
 	return 100, nil
 }
 
-type mockParser struct{}
+type mockParser struct {
+	preflightErr error
+}
 
 func (m *mockParser) ExtractImages(pdfPath string, imgDir string) ([]domain.ExtractedImage, error) {
 	return nil, nil
@@ -112,17 +114,19 @@ func (m *mockParser) OpenDocument(pdfPath string) (domain.PDFDocument, error) {
 	if strings.Contains(pdfPath, "bad") {
 		return nil, errors.New("open pdf: bad format")
 	}
-	return &mockDoc{}, nil
+	return &mockDoc{preflightErr: m.preflightErr}, nil
 }
 
-type mockDoc struct{}
+type mockDoc struct {
+	preflightErr error
+}
 
 func (m *mockDoc) NumPages() int { return 1 }
 func (m *mockDoc) ExtractPageBlocks(pageNum int) ([]domain.PageBlock, error) {
 	return []domain.PageBlock{{Type: domain.BlockTypeText, Text: "Test text"}}, nil
 }
 func (m *mockDoc) AnalyzePreFlight(samplePages int) (domain.PageAnalysis, error) {
-	return domain.PageAnalysis{}, nil
+	return domain.PageAnalysis{}, m.preflightErr
 }
 func (m *mockDoc) Close() error { return nil }
 
@@ -159,5 +163,25 @@ func TestConverter_Convert_NotAPDF(t *testing.T) {
 	}
 	if !strings.Contains(res.Err.Error(), "open pdf") {
 		t.Errorf("expected open pdf error, got %v", res.Err)
+	}
+}
+
+func TestConverter_Convert_SkipsCorruptedEncoding(t *testing.T) {
+	cfg := domain.NewConfig()
+	storage := &mockStorage{writes: make(map[string][]byte)}
+	parser := &mockParser{preflightErr: domain.ErrCorruptedEncoding}
+	conv := NewConverterService(cfg, storage, parser, &mockTokenizer{})
+	tempDir := t.TempDir()
+
+	res := conv.Convert(filepath.Join(tempDir, "encoded.pdf"), tempDir)
+
+	if res.Status != domain.StatusIgnored {
+		t.Fatalf("expected ignored status, got %v", res.Status)
+	}
+	if !errors.Is(res.Err, domain.ErrCorruptedEncoding) {
+		t.Fatalf("expected corrupted encoding reason, got %v", res.Err)
+	}
+	if len(storage.writes) != 0 {
+		t.Fatalf("expected skipped file to avoid markdown writes, got %d writes", len(storage.writes))
 	}
 }

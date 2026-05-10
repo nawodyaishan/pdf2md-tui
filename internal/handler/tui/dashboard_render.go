@@ -164,6 +164,7 @@ func formatDuration(d time.Duration) string {
 func (m Model) renderCompletionView() string {
 	cardWidth := availableWidth(m.width, 8, 24, 110)
 	summary := m.renderSummaryPanel(cardWidth)
+	results := m.renderResultBreakdown(cardWidth)
 	menu := lipgloss.JoinVertical(lipgloss.Left,
 		CardTitleStyle.Render("Next Action"),
 		SubtleTextStyle.Render("choose what happens after this batch"),
@@ -173,6 +174,8 @@ func (m Model) renderCompletionView() string {
 
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		summary,
+		lipgloss.NewStyle().Height(2).Render(""), // Spacer
+		results,
 		lipgloss.NewStyle().Height(2).Render(""), // Spacer
 		menu,
 	)
@@ -207,10 +210,10 @@ func (m Model) renderSummaryPanel(width int) string {
 
 	for _, r := range results {
 		switch {
-		case r.Err != nil || r.Status == domain.StatusError:
-			errCount++
 		case r.Status == domain.StatusIgnored:
 			ignoredCount++
+		case r.Err != nil || r.Status == domain.StatusError:
+			errCount++
 		default:
 			totalIn += r.InputBytes
 			totalOut += r.OutputBytes
@@ -278,6 +281,70 @@ func (m Model) renderSummaryPanel(width int) string {
 	)
 }
 
+func (m Model) renderResultBreakdown(width int) string {
+	if len(m.Results) == 0 {
+		return lipgloss.NewStyle().Width(width).MaxWidth(width).Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				CardTitleStyle.Render("Results"),
+				SubtleTextStyle.Render("no file results were recorded"),
+			),
+		)
+	}
+
+	innerWidth := maxInt(12, width-2)
+	nameWidth := clampInt(innerWidth/3, 12, 34)
+	detailWidth := maxInt(10, innerWidth-nameWidth-12)
+	limit := len(m.Results)
+	if limit > 8 {
+		limit = 8
+	}
+
+	var s strings.Builder
+	s.WriteString(CardTitleStyle.Render("Results") + "\n")
+	s.WriteString(SubtleTextStyle.Render("converted and skipped files in this batch") + "\n\n")
+
+	for i := 0; i < limit; i++ {
+		res := m.Results[i]
+		name := filepath.Base(res.InputPath)
+		if name == "" || name == "." {
+			name = res.InputPath
+		}
+
+		detail := resultDetail(res)
+		fmt.Fprintf(&s, "%s  %s  %s\n",
+			renderResultStatus(res),
+			ValueStrongStyle.Render(truncatePath(name, nameWidth)),
+			SubtleTextStyle.Render(truncatePath(detail, detailWidth)),
+		)
+	}
+
+	if remaining := len(m.Results) - limit; remaining > 0 {
+		fmt.Fprintf(&s, "%s\n", SubtleTextStyle.Render(fmt.Sprintf("... %d more file results", remaining)))
+	}
+
+	return lipgloss.NewStyle().Width(width).MaxWidth(width).Render(s.String())
+}
+
+func resultDetail(res domain.Result) string {
+	switch {
+	case res.Status == domain.StatusIgnored:
+		return resultReason(res, "skipped by pre-flight check")
+	case res.Err != nil || res.Status == domain.StatusError:
+		return resultReason(res, "conversion failed")
+	case res.OutputPath != "":
+		return "-> " + filepath.Base(res.OutputPath)
+	default:
+		return "converted"
+	}
+}
+
+func resultReason(res domain.Result, fallback string) string {
+	if res.Err != nil {
+		return res.Err.Error()
+	}
+	return fallback
+}
+
 func renderSummaryField(label, value string) string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		SectionTitleStyle.Render(label),
@@ -308,10 +375,10 @@ func renderInlinePair(leftLabel, leftValue, rightLabel, rightValue string) strin
 
 func renderResultStatus(res domain.Result) string {
 	switch {
-	case res.Err != nil || res.Status == domain.StatusError:
-		return statusPill("FAIL", ErrorColor)
 	case res.Status == domain.StatusIgnored:
 		return statusPill("SKIP", WarningColor)
+	case res.Err != nil || res.Status == domain.StatusError:
+		return statusPill("FAIL", ErrorColor)
 	default:
 		return statusPill("DONE", SuccessColor)
 	}

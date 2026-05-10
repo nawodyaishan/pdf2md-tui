@@ -49,6 +49,21 @@ func TestSummarizeResultsCountsStatuses(t *testing.T) {
 	}
 }
 
+func TestSummarizeResultsCountsSkippedWithReasonAsIgnored(t *testing.T) {
+	results := []domain.Result{
+		{InputPath: "encoded.pdf", Status: domain.StatusIgnored, Err: domain.ErrCorruptedEncoding},
+	}
+
+	totals := summarizeResults(results)
+
+	if totals.ignored != 1 {
+		t.Fatalf("expected skipped preflight result to count as ignored, got %+v", totals)
+	}
+	if totals.errCount != 0 {
+		t.Fatalf("expected skipped preflight result not to count as error, got %+v", totals)
+	}
+}
+
 func TestResolveOverwritePolicyRequiresForceInNonInteractiveMode(t *testing.T) {
 	needsPrompt, err := resolveOverwritePolicy([]string{"existing.md"}, false, false)
 

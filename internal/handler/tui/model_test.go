@@ -108,6 +108,30 @@ func TestRenderSummaryPanelStacksWithinNarrowWidth(t *testing.T) {
 	}
 }
 
+func TestRenderResultBreakdownShowsConvertedAndSkipped(t *testing.T) {
+	model := NewModel(2, 1)
+	model.Complete = true
+	model.Results = []domain.Result{
+		{InputPath: "converted.pdf", OutputPath: "converted.md", Status: domain.StatusOK},
+		{InputPath: "encoded.pdf", Status: domain.StatusIgnored, Err: domain.ErrCorruptedEncoding},
+	}
+
+	rendered := model.renderResultBreakdown(72)
+
+	if !strings.Contains(rendered, "Results") {
+		t.Fatal("expected result section title")
+	}
+	if !strings.Contains(rendered, "converted.pdf") || !strings.Contains(rendered, "converted.md") {
+		t.Fatal("expected converted file and output path")
+	}
+	if !strings.Contains(rendered, "encoded.pdf") || !strings.Contains(rendered, "corrupted PDF text encoding") {
+		t.Fatal("expected skipped file and reason")
+	}
+	if lipgloss.Width(rendered) > 72 {
+		t.Fatalf("expected result breakdown width <= 72, got %d", lipgloss.Width(rendered))
+	}
+}
+
 func TestRenderCompletionMenuUsesFullLabelOnNarrowWidth(t *testing.T) {
 	model := NewModel(1, 1)
 	model.Complete = true

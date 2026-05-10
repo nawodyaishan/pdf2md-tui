@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
@@ -41,5 +42,21 @@ func TestAnalyzePreFlight_ErrorOnImageOnlyPage(t *testing.T) {
 	// Verify it can be used in error assertions
 	if err.Error() == "" {
 		t.Error("ErrRequiresOCR message is empty")
+	}
+}
+
+func TestClassifyPreFlightResultDetectsCorruptedEncoding(t *testing.T) {
+	err := classifyPreFlightResult(domain.PageAnalysis{CharCount: 500}, 200, 80)
+
+	if !errors.Is(err, domain.ErrCorruptedEncoding) {
+		t.Fatalf("expected ErrCorruptedEncoding, got %v", err)
+	}
+}
+
+func TestClassifyPreFlightResultDetectsOCRBeforeEncoding(t *testing.T) {
+	err := classifyPreFlightResult(domain.PageAnalysis{CharCount: 10, XObjectCnt: 1}, 200, 80)
+
+	if !errors.Is(err, domain.ErrRequiresOCR) {
+		t.Fatalf("expected ErrRequiresOCR, got %v", err)
 	}
 }

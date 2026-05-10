@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -43,6 +44,18 @@ func TestStatusConstants(t *testing.T) {
 	}
 	if StatusError != 2 {
 		t.Errorf("expected StatusError to be 2, got %d", StatusError)
+	}
+}
+
+func TestIsSkippablePreflightError(t *testing.T) {
+	if !IsSkippablePreflightError(ErrRequiresOCR) {
+		t.Fatal("expected OCR pre-flight error to be skippable")
+	}
+	if !IsSkippablePreflightError(ErrCorruptedEncoding) {
+		t.Fatal("expected corrupted encoding pre-flight error to be skippable")
+	}
+	if IsSkippablePreflightError(errors.New("boom")) {
+		t.Fatal("unexpected generic error classified as skippable")
 	}
 }
 

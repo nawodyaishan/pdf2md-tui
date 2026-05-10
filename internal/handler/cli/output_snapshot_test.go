@@ -108,6 +108,12 @@ func TestTextSummaryWithMultipleFiles(t *testing.T) {
 	if !strings.Contains(output, "2") {
 		t.Error("output should show 2 converted files")
 	}
+	if !strings.Contains(output, "Converted files") || !strings.Contains(output, "file1.pdf -> file1.md") {
+		t.Error("output should list converted files with output paths")
+	}
+	if !strings.Contains(output, "Skipped files") || !strings.Contains(output, "document requires OCR") {
+		t.Error("output should list skipped files with reasons")
+	}
 }
 
 func TestTextSummaryWithErrors(t *testing.T) {

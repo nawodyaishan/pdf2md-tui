@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -128,11 +127,17 @@ var convertCmd = &cobra.Command{
 				_ = doc.Close()
 			}
 
-			if errors.Is(err, domain.ErrRequiresOCR) {
-				pterm.DefaultLogger.Warn("Skipping file: Requires OCR", pterm.DefaultLogger.Args("file", f))
+			if domain.IsSkippablePreflightError(err) {
+				pterm.DefaultLogger.Warn("Skipping file during pre-flight", pterm.DefaultLogger.Args("file", f, "reason", err.Error()))
+				var inputBytes int64
+				if info, statErr := os.Stat(f); statErr == nil {
+					inputBytes = info.Size()
+				}
 				preflightResults = append(preflightResults, domain.Result{
-					InputPath: f,
-					Status:    domain.StatusIgnored,
+					InputPath:  f,
+					InputBytes: inputBytes,
+					Status:     domain.StatusIgnored,
+					Err:        err,
 				})
 			} else {
 				convertible = append(convertible, f)
@@ -161,9 +166,11 @@ var convertCmd = &cobra.Command{
 		var tuiModel tui.Model
 
 		if useDashboard {
-			ui.SetBatchInfo(len(convertible), numWorkers)
+			ui.SetBatchInfo(len(pdfFiles), numWorkers)
 			clearTerminal(os.Stdout)
-			tuiModel = tui.NewModel(len(convertible), numWorkers)
+			tuiModel = tui.NewModel(len(pdfFiles), numWorkers)
+			tuiModel.Results = append(tuiModel.Results, preflightResults...)
+			tuiModel.CurrentFile = len(preflightResults)
 			prog = tea.NewProgram(tuiModel, tea.WithAltScreen())
 			msgChan = make(chan tea.Msg)
 
@@ -275,7 +282,10 @@ var convertCmd = &cobra.Command{
 			}
 		}
 
-		allResults := mergeResults(preflightResults, liveResults)
+		allResults := liveResults
+		if !useDashboard {
+			allResults = mergeResults(preflightResults, liveResults)
+		}
 		totals := summarizeResults(allResults)
 
 		if !useDashboard {
@@ -312,10 +322,10 @@ func summarizeResults(results []domain.Result) conversionTotals {
 
 	for _, res := range results {
 		switch {
-		case res.Err != nil || res.Status == domain.StatusError:
-			totals.errCount++
 		case res.Status == domain.StatusIgnored:
 			totals.ignored++
+		case res.Err != nil || res.Status == domain.StatusError:
+			totals.errCount++
 		default:
 			totals.converted++
 			totals.inputBytes += res.InputBytes
@@ -394,14 +404,39 @@ func printTextSummary(w io.Writer, results []domain.Result, totals conversionTot
 	_, _ = fmt.Fprintf(w, "Peak CPU: %.1f%%\n", sys.CPUUsage)
 	_, _ = fmt.Fprintf(w, "Peak memory: %d bytes (%.1f%%)\n", sys.MemoryUsed, sys.MemoryPct)
 
-	if totals.errCount > 0 {
-		_, _ = fmt.Fprintln(w, "Failed files:")
+	if totals.converted > 0 {
+		_, _ = fmt.Fprintln(w, "Converted files:")
 		for _, res := range results {
-			if res.Err != nil || res.Status == domain.StatusError {
-				_, _ = fmt.Fprintf(w, "- %s: %v\n", res.InputPath, res.Err)
+			if res.Status == domain.StatusOK && res.Err == nil {
+				_, _ = fmt.Fprintf(w, "- %s -> %s\n", res.InputPath, res.OutputPath)
 			}
 		}
 	}
+
+	if totals.ignored > 0 {
+		_, _ = fmt.Fprintln(w, "Skipped files:")
+		for _, res := range results {
+			if res.Status == domain.StatusIgnored {
+				_, _ = fmt.Fprintf(w, "- %s: %s\n", res.InputPath, resultReason(res, "skipped by pre-flight check"))
+			}
+		}
+	}
+
+	if totals.errCount > 0 {
+		_, _ = fmt.Fprintln(w, "Failed files:")
+		for _, res := range results {
+			if res.Status != domain.StatusIgnored && (res.Err != nil || res.Status == domain.StatusError) {
+				_, _ = fmt.Fprintf(w, "- %s: %s\n", res.InputPath, resultReason(res, "conversion failed"))
+			}
+		}
+	}
+}
+
+func resultReason(res domain.Result, fallback string) string {
+	if res.Err != nil {
+		return res.Err.Error()
+	}
+	return fallback
 }
 
 func openDir(path string) error {

@@ -186,7 +186,7 @@ func (m Model) completionMenuItems() []completionMenuItem {
 
 func (m Model) hasFailures() bool {
 	for _, res := range m.Results {
-		if res.Err != nil || res.Status == domain.StatusError {
+		if res.Status != domain.StatusIgnored && (res.Err != nil || res.Status == domain.StatusError) {
 			return true
 		}
 	}

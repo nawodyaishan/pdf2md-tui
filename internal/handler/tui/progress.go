@@ -273,6 +273,33 @@ func (p *Progress) PrintSummary(results []domain.Result, inputBytes, outputBytes
 	// Render panels
 	_ = pterm.DefaultPanel.WithPanels(panels).WithPadding(2).Render()
 
+	if len(results) > 0 {
+		pterm.Println()
+		pterm.DefaultSection.
+			WithLevel(2).
+			WithStyle(pterm.NewStyle(pterm.FgLightCyan, pterm.Bold)).
+			Println("Result Details")
+
+		if convertedCount := countResults(results, domain.StatusOK); convertedCount > 0 {
+			pterm.Printf("%s\n", pterm.NewStyle(pterm.FgLightGreen, pterm.Bold).Sprint("Converted files"))
+			for _, res := range results {
+				if res.Status == domain.StatusOK && res.Err == nil {
+					pterm.Printf("%s  %s -> %s\n", pterm.NewStyle(pterm.FgLightGreen).Sprint("•"), pterm.NewStyle(pterm.FgDefault, pterm.Bold).Sprint(res.InputPath), pterm.NewStyle(pterm.FgGray).Sprint(res.OutputPath))
+				}
+			}
+		}
+
+		if ignoredCount > 0 {
+			pterm.Printf("%s\n", pterm.NewStyle(pterm.FgLightYellow, pterm.Bold).Sprint("Skipped files"))
+			for _, res := range results {
+				if res.Status == domain.StatusIgnored {
+					pterm.Printf("%s  %s\n", pterm.NewStyle(pterm.FgLightYellow).Sprint("•"), pterm.NewStyle(pterm.FgDefault, pterm.Bold).Sprint(res.InputPath))
+					pterm.Printf("   %s %s\n", pterm.NewStyle(pterm.FgGray).Sprint("Reason:"), pterm.NewStyle(pterm.FgLightYellow, pterm.Italic).Sprint(progressResultReason(res, "skipped by pre-flight check")))
+				}
+			}
+		}
+	}
+
 	// If there are failures, list them clearly
 	if errCount > 0 {
 		pterm.Println()
@@ -282,9 +309,9 @@ func (p *Progress) PrintSummary(results []domain.Result, inputBytes, outputBytes
 			Println("❌ Failure Details")
 
 		for _, res := range results {
-			if res.Err != nil {
+			if res.Status != domain.StatusIgnored && (res.Err != nil || res.Status == domain.StatusError) {
 				pterm.Printf("%s  %s\n", pterm.NewStyle(pterm.FgLightRed).Sprint("•"), pterm.NewStyle(pterm.FgDefault, pterm.Bold).Sprint(res.InputPath))
-				pterm.Printf("   %s %s\n", pterm.NewStyle(pterm.FgGray).Sprint("Reason:"), pterm.NewStyle(pterm.FgLightRed, pterm.Italic).Sprint(res.Err.Error()))
+				pterm.Printf("   %s %s\n", pterm.NewStyle(pterm.FgGray).Sprint("Reason:"), pterm.NewStyle(pterm.FgLightRed, pterm.Italic).Sprint(progressResultReason(res, "conversion failed")))
 			}
 		}
 	}
@@ -295,6 +322,23 @@ func (p *Progress) PrintSummary(results []domain.Result, inputBytes, outputBytes
 		pterm.Gray(fmt.Sprintf("─── %s ───", repoURL)),
 	)
 	pterm.Println()
+}
+
+func countResults(results []domain.Result, status domain.Status) int {
+	count := 0
+	for _, res := range results {
+		if res.Status == status && (status != domain.StatusOK || res.Err == nil) {
+			count++
+		}
+	}
+	return count
+}
+
+func progressResultReason(res domain.Result, fallback string) string {
+	if res.Err != nil {
+		return res.Err.Error()
+	}
+	return fallback
 }
 
 // ShowPostConversionMenu displays interactive options after conversion.

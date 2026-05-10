@@ -60,9 +60,9 @@ func (c *ConverterService) Convert(pdfPath, outDir string) domain.Result {
 
 	// Analyze pre-flight
 	_, err = doc.AnalyzePreFlight(3)
-	if err == domain.ErrRequiresOCR {
+	if domain.IsSkippablePreflightError(err) {
 		res.Status = domain.StatusIgnored
-		res.Err = domain.ErrRequiresOCR
+		res.Err = err
 		return res
 	}
 

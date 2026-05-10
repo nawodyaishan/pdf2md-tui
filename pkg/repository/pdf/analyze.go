@@ -16,7 +16,8 @@ const ocrTextThreshold = 50
 const encodingCorruptionThreshold = 0.20
 
 // AnalyzePreFlight performs a lightweight pre-flight check on the first samplePages of a PDF.
-// It returns ErrRequiresOCR if the document appears to be scanned, image-only, or has corrupted encoding.
+// It returns ErrRequiresOCR for scanned/image-only documents and ErrCorruptedEncoding
+// when extracted text appears to come from a broken character mapping.
 func AnalyzePreFlight(reader *ledongpdf.Reader, samplePages int) (domain.PageAnalysis, error) {
 	var analysis domain.PageAnalysis
 	var totalChars, nonAsciiChars int
@@ -56,13 +57,21 @@ func AnalyzePreFlight(reader *ledongpdf.Reader, samplePages int) (domain.PageAna
 		}
 	}
 
-	if analysis.CharCount < ocrTextThreshold && analysis.XObjectCnt > 0 {
-		return analysis, domain.ErrRequiresOCR
-	}
-
-	if totalChars > 100 && float64(nonAsciiChars)/float64(totalChars) > encodingCorruptionThreshold {
-		return analysis, domain.ErrRequiresOCR
+	if err := classifyPreFlightResult(analysis, totalChars, nonAsciiChars); err != nil {
+		return analysis, err
 	}
 
 	return analysis, nil
+}
+
+func classifyPreFlightResult(analysis domain.PageAnalysis, totalChars, nonAsciiChars int) error {
+	if analysis.CharCount < ocrTextThreshold && analysis.XObjectCnt > 0 {
+		return domain.ErrRequiresOCR
+	}
+
+	if totalChars > 100 && float64(nonAsciiChars)/float64(totalChars) > encodingCorruptionThreshold {
+		return domain.ErrCorruptedEncoding
+	}
+
+	return nil
 }
