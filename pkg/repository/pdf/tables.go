@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"unicode"
 
 	ledongpdf "github.com/ledongthuc/pdf"
 	"github.com/nawodyaishan/pdf2md-tui/pkg/domain"
@@ -287,7 +288,7 @@ func sanitizeText(s string) string {
 
 	// 3. Remove non-printable characters but keep standard whitespace
 	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\t' || r == '\r' || r >= 32 {
+		if r == '\n' || r == '\t' || r == '\r' || (unicode.IsPrint(r) && !unicode.IsControl(r)) {
 			return r
 		}
 		return -1

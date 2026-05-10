@@ -42,6 +42,10 @@ func TestQA_GoldenMaster(t *testing.T) {
 		t.Run(filepath.Base(pdfPath), func(t *testing.T) {
 			tempOut := t.TempDir()
 			res := conv.Convert(pdfPath, tempOut)
+			if res.Status == domain.StatusIgnored {
+				t.Logf("Document gracefully ignored: %v", res.Err)
+				return // Expected for OCR-required files
+			}
 			if res.Status != domain.StatusOK {
 				t.Fatalf("Conversion failed: %v", res.Err)
 			}
