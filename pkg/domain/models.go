@@ -42,10 +42,10 @@ type PageAnalysis struct {
 
 // Summary is a JSON-serializable report of the conversion session.
 type Summary struct {
-	Converted int           `json:"converted"`
-	Skipped   int           `json:"skipped"`
-	Errors    int           `json:"errors"`
-	Duration  string        `json:"duration"`
+	TotalFiles int           `json:"total_files"`
+	Successful int           `json:"successful"`
+	Failed     int           `json:"failed"`
+	ElapsedMs  int64         `json:"elapsed_ms"`
 	Files     []FileSummary `json:"files"`
 }
 
