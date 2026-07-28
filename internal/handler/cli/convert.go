@@ -369,6 +369,7 @@ func printJSONSummary(results []domain.Result, totals conversionTotals) {
 		TotalFiles: len(results),
 		Successful: totals.converted,
 		Failed:     totals.errCount,
+		Skipped:    totals.ignored,
 		ElapsedMs:  totals.duration.Milliseconds(),
 	}
 

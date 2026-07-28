@@ -2,7 +2,7 @@
 # This test verifies the core convert command works end-to-end
 
 exec pdf2md-tui convert $TESTDATA_DIR/devops_project --quiet --output markdown_out --force
-stdout '"converted"'
+stdout '"successful"'
 ! stderr .
 
 # Verify at least one markdown file was created in the input directory
