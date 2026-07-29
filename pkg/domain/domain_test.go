@@ -125,10 +125,10 @@ func TestPageAnalysis(t *testing.T) {
 
 func TestSummary(t *testing.T) {
 	summary := Summary{
-		Converted: 5,
+		Successful: 5,
 		Skipped:   2,
-		Errors:    1,
-		Duration:  "5s",
+		Failed:    1,
+		ElapsedMs:  5000,
 		Files: []FileSummary{
 			{
 				Input:       "test.pdf",
@@ -139,8 +139,8 @@ func TestSummary(t *testing.T) {
 			},
 		},
 	}
-	if summary.Converted != 5 {
-		t.Errorf("Converted count mismatch")
+	if summary.Successful != 5 {
+		t.Errorf("Successful count mismatch")
 	}
 	if len(summary.Files) != 1 {
 		t.Errorf("Files count mismatch")

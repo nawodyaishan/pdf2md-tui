@@ -54,11 +54,15 @@ var convertCmd = &cobra.Command{
 		}
 
 		// Initialize logger
+		if quiet {
+			pterm.SetDefaultOutput(os.Stderr)
+			pterm.DefaultLogger.Writer = os.Stderr
+		}
 		logF, logErr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if logErr == nil {
 			defer func() { _ = logF.Close() }()
 			pterm.DefaultLogger.Writer = logF
-			if verbose {
+			if verbose || quiet {
 				pterm.DefaultLogger.Writer = io.MultiWriter(logF, os.Stderr)
 			}
 			pterm.DefaultLogger.Info("Conversion session started", pterm.DefaultLogger.Args("time", time.Now().Format(time.RFC3339)))
@@ -80,6 +84,8 @@ var convertCmd = &cobra.Command{
 		if len(pdfFiles) == 0 {
 			if !quiet {
 				ui.PrintNoPDFsFound(targetDir)
+			} else {
+				printJSONSummary(nil, conversionTotals{duration: 0})
 			}
 			return nil
 		}
@@ -360,10 +366,11 @@ func resolveOverwritePolicy(existing []string, force, interactive bool) (bool, e
 
 func printJSONSummary(results []domain.Result, totals conversionTotals) {
 	summary := domain.Summary{
-		Duration:  totals.duration.String(),
-		Converted: totals.converted,
-		Skipped:   totals.ignored,
-		Errors:    totals.errCount,
+		TotalFiles: len(results),
+		Successful: totals.converted,
+		Failed:     totals.errCount,
+		Skipped:    totals.ignored,
+		ElapsedMs:  totals.duration.Milliseconds(),
 	}
 
 	for _, res := range results {
@@ -390,7 +397,7 @@ func printJSONSummary(results []domain.Result, totals conversionTotals) {
 	}
 
 	data, _ := json.MarshalIndent(summary, "", "  ")
-	fmt.Println(string(data))
+	fmt.Fprintln(os.Stdout, string(data))
 }
 
 func printTextSummary(w io.Writer, results []domain.Result, totals conversionTotals, sys domain.SysInfo) {
