@@ -54,15 +54,11 @@ var convertCmd = &cobra.Command{
 		}
 
 		// Initialize logger
-		if quiet {
-			pterm.SetDefaultOutput(os.Stderr)
-			pterm.DefaultLogger.Writer = os.Stderr
-		}
 		logF, logErr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if logErr == nil {
 			defer func() { _ = logF.Close() }()
 			pterm.DefaultLogger.Writer = logF
-			if verbose || quiet {
+			if verbose {
 				pterm.DefaultLogger.Writer = io.MultiWriter(logF, os.Stderr)
 			}
 			pterm.DefaultLogger.Info("Conversion session started", pterm.DefaultLogger.Args("time", time.Now().Format(time.RFC3339)))
@@ -397,7 +393,7 @@ func printJSONSummary(results []domain.Result, totals conversionTotals) {
 	}
 
 	data, _ := json.MarshalIndent(summary, "", "  ")
-	fmt.Fprintln(os.Stdout, string(data))
+	_, _ = fmt.Fprintln(os.Stdout, string(data))
 }
 
 func printTextSummary(w io.Writer, results []domain.Result, totals conversionTotals, sys domain.SysInfo) {
