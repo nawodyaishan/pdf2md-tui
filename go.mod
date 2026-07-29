@@ -1,6 +1,6 @@
 module github.com/nawodyaishan/pdf2md-tui
 
-go 1.26.3
+go 1.26.5
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -15,7 +15,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/text v0.37.0
+	golang.org/x/text v0.39.0
 	pgregory.net/rapid v1.3.0
 )
 
@@ -59,9 +59,9 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/image v0.39.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/image v0.43.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/tools v0.47.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
